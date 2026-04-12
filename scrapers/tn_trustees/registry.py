@@ -57,8 +57,8 @@ TRUSTEE_REGISTRY: dict[str, dict] = {
             "MWZM",
         ],
         "site_url": "https://mwzmlaw.com/tn-investors/",
-        "scraper":  None,
-        "status":   "pending",
+        "scraper": "mackie_wolf",
+        "status": "active",
     },
     "llg_trustee": {
         "canonical_name": "LLG Trustee TN LLC",

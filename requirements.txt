@@ -9,3 +9,4 @@ requests>=2.31.0
 lxml>=5.1.0
 playwright
 python-dotenv
+pdfplumber

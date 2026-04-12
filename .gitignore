@@ -1,0 +1,30 @@
+# Google OAuth secrets and tokens
+.env
+credentials.json
+gmail_token.json
+sheets_token.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# PyCharm
+.idea/
+
+# Playwright browsers (large, re-installable)
+.playwright/
+
+# Logs and temp files
+*.log
+*.tmp

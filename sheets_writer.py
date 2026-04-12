@@ -436,8 +436,13 @@ def write_new_listings(listings: list[dict], dry_run: bool = False) -> dict:
     _ensure_header(TAB_MAIN,   HEADER_MAIN)
     _ensure_header(TAB_REVIEW, HEADER_REVIEW)
 
-    existing_keys      = _build_existing_keys(_get_all_rows(TAB_MAIN))
+    existing_keys = _build_existing_keys(_get_all_rows(TAB_MAIN))
+    # Secondary 3-tuple index (county, street_num, sale_date) — no defendant.
+    # Used to catch cross-source dupes where TNLedger has a defendant name
+    # but a trustee scraper doesn't (both would otherwise pass the 4-tuple check).
+    existing_keys_3: set[tuple] = {(c, s, d) for (c, s, d, _) in existing_keys}
     seen_this_batch: set[tuple] = set()
+    seen_this_batch_3: set[tuple] = set()
     to_add:    list[list] = []
     to_review: list[list] = []
     counts = {"added": 0, "needs_review": 0, "skipped_too_soon": 0, "skipped_duplicate": 0}
@@ -466,12 +471,23 @@ def write_new_listings(listings: list[dict], dry_run: bool = False) -> dict:
             continue
 
         key = _make_dedup_key(listing)
-        if key in existing_keys or key in seen_this_batch:
+        last_name = key[3]  # (county, street_num, sale_date, last_name)
+
+        is_dup = key in existing_keys or key in seen_this_batch
+        if not is_dup and last_name == "":
+            # No defendant (trustee scraper) — secondary check ignoring defendant
+            # catches properties that TNLedger already wrote with a defendant name.
+            key_3 = key[:3]
+            is_dup = key_3 in existing_keys_3 or key_3 in seen_this_batch_3
+
+        if is_dup:
             print(f"  [SKIP - duplicate]          {street} — {sale_date}")
             counts["skipped_duplicate"] += 1
             continue
 
         seen_this_batch.add(key)
+        if last_name == "":
+            seen_this_batch_3.add(key[:3])
         to_add.append(_listing_to_row(listing))
         counts["added"] += 1
         print(f"  [ADD]                       {street} — {sale_date}")

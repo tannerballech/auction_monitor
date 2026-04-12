@@ -435,8 +435,20 @@ def run_tn_check(dry_run: bool = False, counties: list[str] | None = None) -> No
             all_postponements.extend(postponements)
             all_flags.extend(flags)
 
+
+        elif scraper_name == "internetpostings":
+
+            # FLG rows are covered by the site-wide internetpostings block below.
+
+            # Acknowledge here to suppress the "not wired" warning.
+
+            print(f"\n  [TN CHECK] {canonical} — {len(rows)} row(s) covered by site-wide internetpostings check.")
+
+
         elif status == "active":
+
             # Scraper listed as active but not handled above — shouldn't happen
+
             print(f"\n  [TN CHECK] {canonical} — scraper '{scraper_name}' not wired in run_tn_check(). Skipping.")
 
         elif status in ("pending", "needs_research"):

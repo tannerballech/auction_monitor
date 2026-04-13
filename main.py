@@ -44,6 +44,11 @@ from scrapers.tn_trustees import robertson_anschutz as _rasc_scraper
 from scrapers.tn_trustees import brock_scott as _bs_scraper
 from scrapers.tn_trustees import capital_city_postings as _ccp_scraper
 from scrapers.tn_trustees import mickel_law as _mickel_scraper
+from scrapers.tn_trustees import nw_posting_services as _nwps_scraper
+from scrapers.tn_trustees import clear_recon as _cr_scraper
+from scrapers.tn_trustees import phillip_jones as _pj_scraper
+from scrapers.tn_trustees import anchor_posting as _ap_scraper
+from scrapers.tn_trustees import foreclosure_postings as _fp_scraper
 from gmail_reader import scrape_emails
 
 # ── Sheets ────────────────────────────────────────────────────────────────────
@@ -374,6 +379,89 @@ def run_scrape(
             print(f"  [mickel_law] ERROR: {e}")
             traceback.print_exc()
 
+    # ── [NW POSTING SERVICES] — Marinosci + ALAW ──────────────────────────────
+    print("\n[NW POSTING SERVICES] Fetching TN listings (Marinosci / ALAW)...")
+    if "existing_addr_set" not in dir():
+        existing_addr_set = get_tn_existing_set()
+    try:
+        nwps_listings, _ = _nwps_scraper.scrape_nw_posting_services(
+            existing_addr_set, dry_run=args.dry_run
+        )
+        if nwps_listings:
+            print(f"  {len(nwps_listings)} new listing(s) found.")
+            all_listings.extend(nwps_listings)
+        else:
+            print("  No new listings.")
+    except Exception as e:
+        print(f"  [NW POSTING SERVICES] ERROR: {e}")
+        traceback.print_exc()
+
+    # ── [CLEAR RECON] ──────────────────────────────────────────────────────────
+    print("\n[CLEAR RECON] Fetching TN listings...")
+    if "existing_addr_set" not in dir():
+        existing_addr_set = get_tn_existing_set()
+    try:
+        cr_listings, _ = _cr_scraper.scrape_clear_recon(
+            existing_addr_set, dry_run=args.dry_run
+        )
+        if cr_listings:
+            print(f"  {len(cr_listings)} new listing(s) found.")
+            all_listings.extend(cr_listings)
+        else:
+            print("  No new listings.")
+    except Exception as e:
+        print(f"  [CLEAR RECON] ERROR: {e}")
+        traceback.print_exc()
+
+    # ── [PHILLIP JONES] ────────────────────────────────────────────────────────
+    print("\n[PHILLIP JONES] Fetching TN listings...")
+    if "existing_addr_set" not in dir():
+        existing_addr_set = get_tn_existing_set()
+    try:
+        pj_listings, _ = _pj_scraper.scrape_phillip_jones(
+            existing_addr_set, dry_run=args.dry_run
+        )
+        if pj_listings:
+            print(f"  {len(pj_listings)} new listing(s) found.")
+            all_listings.extend(pj_listings)
+        else:
+            print("  No new listings.")
+    except Exception as e:
+        print(f"  [PHILLIP JONES] ERROR: {e}")
+        traceback.print_exc()
+
+    print("\n[ANCHOR POSTING] Fetching TN listings (McMichael Taylor Gray)...")
+    if "existing_addr_set" not in dir():
+        existing_addr_set = get_tn_existing_set()
+    try:
+        ap_listings, _ = _ap_scraper.scrape_anchor_posting(
+            existing_addr_set, dry_run=args.dry_run
+        )
+        if ap_listings:
+            print(f"  {len(ap_listings)} new listing(s) found.")
+            all_listings.extend(ap_listings)
+        else:
+            print("  No new listings.")
+    except Exception as e:
+        print(f"  [ANCHOR POSTING] ERROR: {e}")
+        traceback.print_exc()
+
+    print("\n[FORECLOSURE POSTINGS] Fetching TN listings (Vylla / Arnold M. Weiss)...")
+    if "existing_addr_set" not in dir():
+        existing_addr_set = get_tn_existing_set()
+    try:
+        fp_listings, _ = _fp_scraper.scrape_foreclosure_postings(
+            existing_addr_set, dry_run=args.dry_run
+        )
+        if fp_listings:
+            print(f"  {len(fp_listings)} new listing(s) found.")
+            all_listings.extend(fp_listings)
+        else:
+            print("  No new listings.")
+    except Exception as e:
+        print(f"  [FORECLOSURE POSTINGS] ERROR: {e}")
+        traceback.print_exc()
+
     # ── Simple web scrapers (Boone only) ──────────────────────────────────────
     if not email_only:
         scrapers_to_run = WEB_SCRAPERS
@@ -579,6 +667,47 @@ def run_tn_check(dry_run: bool = False, counties: list[str] | None = None) -> No
             all_postponements.extend(postponements)
             all_flags.extend(flags)
 
+        elif scraper_name == "nw_posting_services":
+            # Marinosci + ALAW both live here — accumulate rows,
+            # run one combined API call after the loop.
+            if not hasattr(run_tn_check, "_nwps_rows"):
+                run_tn_check._nwps_rows = []
+            run_tn_check._nwps_rows.extend(rows)
+            print(
+                f"\n  [TN CHECK] {canonical} — {len(rows)} row(s) queued "
+                f"for NW Posting Services combined check."
+            )
+
+        elif scraper_name == "clear_recon":
+            print(f"\n  [TN CHECK] {canonical} — checking {len(rows)} row(s)...")
+            _, flags = _cr_scraper.check_existing(rows, dry_run=dry_run)
+            print(f"    0 postponement(s), {len(flags)} manual-check flag(s).")
+            all_flags.extend(flags)
+
+        elif scraper_name == "phillip_jones":
+            print(f"\n  [TN CHECK] {canonical} — checking {len(rows)} row(s)...")
+            postponements, flags = _pj_scraper.check_existing(rows, dry_run=dry_run)
+            print(
+                f"    {len(postponements)} postponement(s), "
+                f"{len(flags)} manual-check flag(s)."
+            )
+            all_postponements.extend(postponements)
+            all_flags.extend(flags)
+
+        elif scraper_name == "anchor_posting":
+            print(f"\n  [TN CHECK] {canonical} — checking {len(rows)} row(s)...")
+            postponements, flags = _ap_scraper.check_existing(rows, dry_run=dry_run)
+            print(f"    {len(postponements)} postponement(s), {len(flags)} manual-check flag(s).")
+            all_postponements.extend(postponements)
+            all_flags.extend(flags)
+
+        elif scraper_name == "foreclosure_postings":
+            print(f"\n  [TN CHECK] {canonical} — checking {len(rows)} row(s)...")
+            postponements, flags = _fp_scraper.check_existing(rows, dry_run=dry_run)
+            print(f"    {len(postponements)} postponement(s), {len(flags)} manual-check flag(s).")
+            all_postponements.extend(postponements)
+            all_flags.extend(flags)
+
         elif status == "active":
 
             # Scraper listed as active but not handled above — shouldn't happen
@@ -589,6 +718,26 @@ def run_tn_check(dry_run: bool = False, counties: list[str] | None = None) -> No
             print(f"\n  [TN CHECK] {canonical} — no scraper yet (status: {status}). Skipping {len(rows)} row(s).")
 
         # no_site and no_scraper: silent skip
+
+    # NW Posting Services combined check (Marinosci + ALAW in one API call)
+    nwps_rows = getattr(run_tn_check, "_nwps_rows", [])
+    if nwps_rows:
+        print(
+            f"\n  [TN CHECK] NW Posting Services — checking "
+            f"{len(nwps_rows)} row(s) (Marinosci + ALAW combined)..."
+        )
+        try:
+            nwps_postponements, _ = _nwps_scraper.check_existing(
+                nwps_rows, dry_run=dry_run
+            )
+            print(f"    {len(nwps_postponements)} postponement(s).")
+            all_postponements.extend(nwps_postponements)
+        except Exception as e:
+            print(f"  [NW POSTING SERVICES] check ERROR: {e}")
+            traceback.print_exc()
+        finally:
+            if hasattr(run_tn_check, "_nwps_rows"):
+                del run_tn_check._nwps_rows
 
     print(f"\n  [TN CHECK] internetpostings.com — checking all {len(tn_rows)} TN row(s)...")
     try:

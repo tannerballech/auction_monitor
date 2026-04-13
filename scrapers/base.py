@@ -364,3 +364,37 @@ def clean_money(raw: str) -> str:
     if match:
         return match.group(1)
     return raw.strip()
+
+
+_COUNTY_NAME_FIXES: dict[str, str] = {
+    # Tennessee — Mc-prefix mangling
+    "Mcminn": "McMinn",
+    "Mcnairy": "McNairy",
+    # Tennessee — DeKalb (Dekalb from title-case)
+    "Dekalb": "DeKalb",
+    # Tennessee — source typos
+    "Reah": "Rhea",
+    # Kentucky — Mc-prefix mangling
+    "Mccreary": "McCreary",
+    "Mccracken": "McCracken",
+    "Mccallum": "McCallum",
+    # Indiana / Ohio — add as needed
+}
+
+
+def normalize_county(county: str) -> str:
+    """
+    Fix county name capitalization issues caused by str.title() on ALL_CAPS
+    source data, and correct known source typos.
+
+    Examples:
+      "Mcminn"  → "McMinn"
+      "Mcnairy" → "McNairy"
+      "Dekalb"  → "DeKalb"
+      "Reah"    → "Rhea"
+
+    All other names pass through unchanged.
+    """
+    if not county:
+        return county
+    return _COUNTY_NAME_FIXES.get(county.strip(), county.strip())

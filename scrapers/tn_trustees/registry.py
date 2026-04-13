@@ -66,10 +66,27 @@ TRUSTEE_REGISTRY: dict[str, dict] = {
             "LLG Trustee TN LLC",
             "LLG Trustee TN, LLC",
             "LLG Trustee Tennessee LLC",
+            "LOGS Legal Group LLP",  # parent firm name seen in notices
         ],
-        "site_url": "https://www.logs.com/tn-sales-report.html",
-        "scraper":  None,
-        "status":   "no_scraper",  # PowerBI embed
+        "site_url": "https://betterchoicenotices.com/",
+        "scraper": None,
+        "status": "pending",  # was no_scraper; site found, scrapability TBD
+    },
+    "arnold_weiss": {
+        "canonical_name": "The Law Offices of Arnold M. Weiss, PLLC",
+        "aliases": [
+            "The Law Offices of Arnold M. Weiss, PLLC",
+            "Law Offices of Arnold M. Weiss, PLLC",
+            "Arnold M. Weiss, PLLC",
+            "Arnold M. Weiss",
+            "Arnold M. Weiss, Esq.",
+            "ARNOLD M. WEISS, ESQ.",
+        ],
+        # Posts on two platforms — foreclosure-postings.com is the Excel-download
+        # one being built. BetterChoiceNotices.com is a separate scraper (pending).
+        "site_url": "https://www.foreclosure-postings.com/Tennessee/",
+        "scraper":  "foreclosure_postings",  # scraper in progress
+        "status":   "pending",
     },
     "robertson_anschutz": {
         "canonical_name": "Robertson, Anschutz, Schneid, Crane & Partners, PLLC",
@@ -110,9 +127,9 @@ TRUSTEE_REGISTRY: dict[str, dict] = {
             "Albertelli Law",
             "ALAW",
         ],
-        "site_url": None,
-        "scraper":  None,
-        "status":   "needs_research",
+        "site_url": "https://www.nwpostingservices.com/",
+        "scraper": "nw_posting_services",
+        "status": "active",
     },
     "marinosci": {
         "canonical_name": "Marinosci Law Group, P.C.",
@@ -122,9 +139,9 @@ TRUSTEE_REGISTRY: dict[str, dict] = {
             "Marinosci Law Group P.C.",
             "Marinosci Law Group",
         ],
-        "site_url": None,
-        "scraper":  None,
-        "status":   "needs_research",
+        "site_url": "https://www.nwpostingservices.com/",
+        "scraper": "nw_posting_services",
+        "status": "active",
     },
     "mcmichael_taylor": {
         "canonical_name": "McMichael Taylor Gray LLC",
@@ -134,9 +151,9 @@ TRUSTEE_REGISTRY: dict[str, dict] = {
             "McMichael Taylor Gray",
             "MTG Law",
         ],
-        "site_url": None,
-        "scraper":  None,
-        "status":   "needs_research",
+        "site_url": "https://anchorposting.com/tn-foreclosure-search/",
+        "scraper": "anchor_posting",
+        "status": "active",  # was no_scraper
     },
     "mickel_law": {
         "canonical_name": "Mickel Law Firm, P.A.",
@@ -185,9 +202,9 @@ TRUSTEE_REGISTRY: dict[str, dict] = {
             "Clear Recon, LLC",
             "Clear Recon",
         ],
-        "site_url": None,
-        "scraper":  None,
-        "status":   "needs_research",
+        "site_url": "https://clearrecon-tn.com/tennessee-listings/",
+        "scraper": "clear_recon",
+        "status": "active",
     },
     "jones_binkley": {
         "canonical_name": "J. Phillip Jones / Jessica D. Binkley",
@@ -197,10 +214,12 @@ TRUSTEE_REGISTRY: dict[str, dict] = {
             "J. Phillip Jones / Jessica D. Binkley",
             "J. Phillip Jones and/or Jessica D. Binkley",
             "J Phillip Jones and or Jessica D Binkley",
+            "J. Phillip Jones",
+            "Phillip Jones",
         ],
-        "site_url": None,
-        "scraper":  None,
-        "status":   "no_site",
+        "site_url": "https://www.phillipjoneslaw.com/foreclosure-auctions.cfm?accept=yes",
+        "scraper": "phillip_jones",
+        "status": "active",
     },
     "mcwaters": {
         "canonical_name": "Thomas W. McWaters, Esq.",
@@ -209,33 +228,26 @@ TRUSTEE_REGISTRY: dict[str, dict] = {
             "Thomas W. McWaters",
             "Thomas W McWaters Esq",
             "Thomas W McWaters",
-        ],
-        "site_url": None,
-        "scraper":  None,
-        "status":   "no_site",
-    },
-    "vylla_solutions": {
-        "canonical_name": "Vylla Solutions - Tennessee, LLC",
-        "aliases": [
-            "Vylla Solutions - Tennessee, LLC",
-            "Vylla Solutions Tennessee LLC",
-            "Vylla Solutions Tennessee, LLC",
-            "Vylla Solutions TN LLC",
-        ],
-        "site_url": None,
-        "scraper":  None,
-        "status":   "no_site",
-    },
-    "wood_lamping": {
-        "canonical_name": "Wood + Lamping LLP",
-        "aliases": [
             "Wood + Lamping LLP",
             "Wood and Lamping LLP",
             "Wood & Lamping LLP",
+            "Wood & Lamping",
         ],
         "site_url": None,
         "scraper":  None,
         "status":   "no_site",
+    },
+    "vylla": {
+        "canonical_name": "Vylla Solutions Tennessee LLC",
+        "aliases": [
+            "Vylla Solutions Tennessee LLC",
+            "Vylla Solutions Tennessee, LLC",
+            "Vylla Solutions",
+            "Vylla",
+        ],
+        "site_url": "https://www.foreclosure-postings.com/Tennessee/",
+        "scraper": "foreclosure_postings",  # scraper in progress
+        "status": "pending",  # was no_scraper
     },
 }
 

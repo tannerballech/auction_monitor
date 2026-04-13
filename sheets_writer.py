@@ -654,6 +654,13 @@ def get_listings_needing_valuation(county_filter: list[str] | None = None) -> li
 
         if county_filter and county.lower() not in [c.lower() for c in county_filter]:
             continue
+        state = row[1].strip() if len(row) > 1 else ""  # col B = State
+        if state.upper() == "TN":
+            import config as _cfg
+            tn_whitelist = getattr(_cfg, "TN_VALUATE_COUNTIES", None)
+            if tn_whitelist is not None:
+                if county.lower() not in [c.lower() for c in tn_whitelist]:
+                    continue
         if cancelled.lower() == "yes":
             continue
         if not sale_date or sale_date < today_str:

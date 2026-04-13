@@ -96,8 +96,8 @@ TRUSTEE_REGISTRY: dict[str, dict] = {
             "Brock & Scott",
         ],
         "site_url": "https://www.brockandscott.com/foreclosure-sales/?_sft_foreclosure_state=tn",
-        "scraper":  None,
-        "status":   "pending",
+        "scraper":  "brock_scott",
+        "status":   "active",
     },
     "albertelli_alaw": {
         "canonical_name": "James E. Albertelli, P.A. d/b/a ALAW",

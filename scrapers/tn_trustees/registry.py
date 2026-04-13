@@ -148,9 +148,9 @@ TRUSTEE_REGISTRY: dict[str, dict] = {
             "Mickel Law Firm P A",
             "Mickel Law Firm",
         ],
-        "site_url": None,
-        "scraper":  None,
-        "status":   "needs_research",
+        "site_url": "https://trustee-foreclosuresalesonline.com/",
+        "scraper": "mickel_law",
+        "status": "active",
     },
     "padgett_law": {
         "canonical_name": "Padgett Law Group",

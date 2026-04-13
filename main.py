@@ -43,6 +43,7 @@ from scrapers.tn_trustees import mackie_wolf as _mw_scraper
 from scrapers.tn_trustees import robertson_anschutz as _rasc_scraper
 from scrapers.tn_trustees import brock_scott as _bs_scraper
 from scrapers.tn_trustees import capital_city_postings as _ccp_scraper
+from scrapers.tn_trustees import mickel_law as _mickel_scraper
 from gmail_reader import scrape_emails
 
 # ── Sheets ────────────────────────────────────────────────────────────────────
@@ -357,6 +358,22 @@ def run_scrape(
             print(f"  [capital_city_postings] ERROR: {e}")
             traceback.print_exc()
 
+    # ── Mickel Law Firm (discovery) ───────────────────────────────────────────
+    if not email_only and (not counties or any(c.lower() in _TN_COUNTIES_LOWER for c in counties)):
+        print("\n[MICKEL] Scraping (discovery mode)...")
+        try:
+            if "existing_addr_set" not in dir():
+                existing_addr_set = get_tn_existing_set() if not dry_run else set()
+            mickel_listings, _ = _mickel_scraper.scrape_mickel(
+                existing_addr_set=existing_addr_set,
+                dry_run=dry_run,
+            )
+            print(f"  Found {len(mickel_listings)} new listing(s).")
+            all_listings.extend(mickel_listings)
+        except Exception as e:
+            print(f"  [mickel_law] ERROR: {e}")
+            traceback.print_exc()
+
     # ── Simple web scrapers (Boone only) ──────────────────────────────────────
     if not email_only:
         scrapers_to_run = WEB_SCRAPERS
@@ -545,6 +562,16 @@ def run_tn_check(dry_run: bool = False, counties: list[str] | None = None) -> No
         elif scraper_name == "capital_city_postings":
             print(f"\n  [TN CHECK] {canonical} — checking {len(rows)} row(s)...")
             postponements, flags = _ccp_scraper.check_existing(rows, dry_run=dry_run)
+            print(
+                f"    {len(postponements)} postponement(s), "
+                f"{len(flags)} manual-check flag(s)."
+            )
+            all_postponements.extend(postponements)
+            all_flags.extend(flags)
+
+        elif scraper_name == "mickel_law":
+            print(f"\n  [TN CHECK] {canonical} — checking {len(rows)} row(s)...")
+            postponements, flags = _mickel_scraper.check_existing(rows, dry_run=dry_run)
             print(
                 f"    {len(postponements)} postponement(s), "
                 f"{len(flags)} manual-check flag(s)."

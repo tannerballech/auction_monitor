@@ -163,9 +163,20 @@ TRUSTEE_REGISTRY: dict[str, dict] = {
             "Timothy D Padgett, Padgett Law Group",
             "Timothy D. Padgett / Padgett Law Group",
         ],
-        "site_url": None,
-        "scraper":  None,
-        "status":   "needs_research",
+        "site_url": "https://capitalcitypostings.com/tennessee-postings",
+        "scraper":  "capital_city_postings",
+        "status":   "active",
+    },
+    "allen_nelson_bowers": {
+        "canonical_name": "Allen, Nelson & Bowers",
+        "aliases": [
+            "Allen, Nelson & Bowers",
+            "Allen Nelson & Bowers",
+            "Allen Nelson and Bowers",
+        ],
+        "site_url": "https://capitalcitypostings.com/tennessee-postings",
+        "scraper":  "capital_city_postings",
+        "status":   "needs_research",  # shares platform but client code unknown
     },
     "clear_recon": {
         "canonical_name": "Clear Recon LLC",

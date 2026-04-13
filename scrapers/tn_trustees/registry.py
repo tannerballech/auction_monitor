@@ -83,8 +83,8 @@ TRUSTEE_REGISTRY: dict[str, dict] = {
             "RASC",
         ],
         "site_url": "https://www.rascranesalesinfo.com/",
-        "scraper":  None,
-        "status":   "pending",
+        "scraper":  "robertson_anschutz",
+        "status":   "active",
     },
     "brock_scott": {
         "canonical_name": "Brock & Scott, PLLC",

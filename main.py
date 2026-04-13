@@ -40,6 +40,7 @@ from scrapers.floyd_in import scrape_floyd_in
 from scrapers.clark_in import scrape_clark_in
 from scrapers.tn_trustees import internetpostings as _ip_scraper
 from scrapers.tn_trustees import mackie_wolf as _mw_scraper
+from scrapers.tn_trustees import robertson_anschutz as _rasc_scraper
 from gmail_reader import scrape_emails
 
 # ── Sheets ────────────────────────────────────────────────────────────────────
@@ -306,6 +307,22 @@ def run_scrape(
             print(f"  [mackie_wolf] ERROR: {e}")
             traceback.print_exc()
 
+    # ── Robertson Anschutz (discovery) ───────────────────────────────────────
+    if not email_only and (not counties or any(c.lower() in _TN_COUNTIES_LOWER for c in counties)):
+        print("\n[ROBERTSON ANSCHUTZ] Scraping (discovery mode)...")
+        try:
+            if "existing_addr_set" not in dir():
+                existing_addr_set = get_tn_existing_set() if not dry_run else set()
+            rasc_listings, _ = _rasc_scraper.scrape_robertson_anschutz(
+                existing_addr_set=existing_addr_set,
+                dry_run=dry_run,
+            )
+            print(f"  Found {len(rasc_listings)} new listing(s).")
+            all_listings.extend(rasc_listings)
+        except Exception as e:
+            print(f"  [robertson_anschutz] ERROR: {e}")
+            traceback.print_exc()
+
     # ── Simple web scrapers (Boone only) ──────────────────────────────────────
     if not email_only:
         scrapers_to_run = WEB_SCRAPERS
@@ -464,6 +481,16 @@ def run_tn_check(dry_run: bool = False, counties: list[str] | None = None) -> No
         elif scraper_name == "mackie_wolf":
             print(f"\n  [TN CHECK] {canonical} — checking {len(rows)} row(s)...")
             postponements, flags = _mw_scraper.check_existing(rows, dry_run=dry_run)
+            print(
+                f"    {len(postponements)} postponement(s), "
+                f"{len(flags)} manual-check flag(s)."
+            )
+            all_postponements.extend(postponements)
+            all_flags.extend(flags)
+
+        elif scraper_name == "robertson_anschutz":
+            print(f"\n  [TN CHECK] {canonical} — checking {len(rows)} row(s)...")
+            postponements, flags = _rasc_scraper.check_existing(rows, dry_run=dry_run)
             print(
                 f"    {len(postponements)} postponement(s), "
                 f"{len(flags)} manual-check flag(s)."

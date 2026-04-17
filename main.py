@@ -79,6 +79,7 @@ from skiptrace import run_skiptraces
 from heir_research import run_heir_research
 from heir_skiptrace import skip_trace_heir
 
+from sheets_sync import sync_to_sheets
 from scrapers.tn_trustees import rubin_lublin as _rl_scraper
 from scrapers.tn_trustees.registry import lookup_trustee, TRUSTEE_REGISTRY
 from storage import (
@@ -549,6 +550,10 @@ def run_scrape(
                 print(f"  [DB] ERROR: {e}")
                 traceback.print_exc()
 
+        print(f"\n[SYNC] Syncing DB → Sheets...")
+        sync_to_sheets()
+        print(f"  Sync complete.")
+
     print(f"\n  Run complete: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     print("=" * 60)
 
@@ -851,6 +856,10 @@ def run_valuate(counties: list[str] | None = None, dry_run: bool = False):
             print(f"  [DB] ERROR: {e}")
             traceback.print_exc()
 
+        print(f"\n[SYNC] Syncing DB → Sheets...")
+        sync_to_sheets()
+        print(f"  Sync complete.")
+
     print(f"\n  Run complete: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     print("=" * 60)
 
@@ -934,6 +943,10 @@ def run_skiptrace(dry_run: bool = False):
         except Exception as e:
             print(f"  [DB] ERROR: {e}")
             traceback.print_exc()
+
+        print(f"\n[SYNC] Syncing DB → Sheets...")
+        sync_to_sheets()
+        print(f"  Sync complete.")
 
     print(f"\n  Run complete: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     print("=" * 60)
@@ -1040,6 +1053,10 @@ def run_heirresearch(dry_run: bool = False):
         except Exception as e:
             print(f"  [DB] ERROR writing heir leads: {e}")
             traceback.print_exc()
+
+        print(f"\n[SYNC] Syncing DB → Sheets...")
+        sync_to_sheets()
+        print(f"  Sync complete.")
 
     print(f"\n  Run complete: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     print("=" * 60)
@@ -1170,6 +1187,10 @@ def run_heir_skiptrace(dry_run: bool = False):
                 traceback.print_exc()
         else:
             print(f"\n  Nothing to write (all rows errored).")
+
+        print(f"\n[SYNC] Syncing DB → Sheets...")
+        sync_to_sheets()
+        print(f"  Sync complete.")
 
     print(f"\n[DB] Deduplicating phone numbers across heirs...")
     try:

@@ -4,7 +4,7 @@ main.py — Eagle Creek Auction Monitor
 Usage:
     python main.py                              # Pull all sources, write new listings
     python main.py --county kenton boone        # Run specific counties only
-    python main.py --dry-run                    # Print results without writing to Sheets
+    python main.py --dry-run                    # Print results without writing to DB
     python main.py --email-only                 # Only check Gmail sources
     python main.py --web-only                   # Only check web sources
     python main.py --valuate                    # Run market value analysis
@@ -503,16 +503,16 @@ def run_scrape(
 
     # ── Write to Sheets ───────────────────────────────────────────────────────
     if dry_run:
-        print(f"\n  [DRY RUN] Not writing to Sheets.")
+        print(f"\n  [DRY RUN] Not writing to DB.")
         _print_sample(all_listings)
     else:
-        print(f"\n[SHEETS] Writing to Google Sheets...")
+        print(f"\n[DB] Writing new listings...")
         try:
             result = write_new_listings(all_listings)
             print(f"  Added: {result['added']} | Review: {result['needs_review']} | "
                   f"Too soon: {result['skipped_too_soon']} | Dupes: {result['skipped_duplicate']}")
         except Exception as e:
-            print(f"  [Sheets] ERROR: {e}")
+            print(f"  [DB] ERROR: {e}")
             traceback.print_exc()
 
         try:
@@ -520,16 +520,16 @@ def run_scrape(
             if filled:
                 print(f"  Back-filled {filled} blank field(s).")
         except Exception as e:
-            print(f"  [Sheets] ERROR back-filling: {e}")
+            print(f"  [DB] ERROR back-filling: {e}")
             traceback.print_exc()
 
         if all_cancellations:
-            print(f"\n[SHEETS] Updating {len(all_cancellations)} cancellation(s)...")
+            print(f"\n[DB] Updating {len(all_cancellations)} cancellation(s)...")
             try:
                 updated = update_cancellations(all_cancellations)
                 print(f"  Marked {updated} listing(s) as cancelled.")
             except Exception as e:
-                print(f"  [Sheets] ERROR: {e}")
+                print(f"  [DB] ERROR: {e}")
                 traceback.print_exc()
 
     print(f"\n  Run complete: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
@@ -769,11 +769,11 @@ def run_valuate(counties: list[str] | None = None, dry_run: bool = False):
     print(f"  {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     print("=" * 60)
 
-    print(f"\n[SHEETS] Fetching listings needing valuation...")
+    print(f"\n[DB] Fetching listings needing valuation...")
     try:
         listings = get_listings_needing_valuation(county_filter=counties)
     except Exception as e:
-        print(f"  [Sheets] ERROR: {e}")
+        print(f"  [DB] ERROR: {e}")
         traceback.print_exc()
         return
 
@@ -816,15 +816,15 @@ def run_valuate(counties: list[str] | None = None, dry_run: bool = False):
         )
 
     if dry_run:
-        print(f"\n  [DRY RUN] Not writing to Sheets.")
+        print(f"\n  [DRY RUN] Not writing to DB.")
         update_valuations(valuated, dry_run=True)
     else:
-        print(f"\n[SHEETS] Writing valuations...")
+        print(f"\n[DB] Writing valuations...")
         try:
             updated_count = update_valuations(valuated)
             print(f"  Updated {updated_count} row(s).")
         except Exception as e:
-            print(f"  [Sheets] ERROR: {e}")
+            print(f"  [DB] ERROR: {e}")
             traceback.print_exc()
 
     print(f"\n  Run complete: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
@@ -840,18 +840,13 @@ def run_skiptrace(dry_run: bool = False):
     print("=" * 60)
 
     if not dry_run:
-        try:
-            ensure_skiptrace_header()
-        except Exception as e:
-            print(f"  [Sheets] ERROR writing headers: {e}")
-            traceback.print_exc()
-            return
+        ensure_skiptrace_header()
 
-    print(f"\n[SHEETS] Fetching listings needing skip trace...")
+    print(f"\n[DB] Fetching listings needing skip trace...")
     try:
         listings = get_listings_needing_skiptrace()
     except Exception as e:
-        print(f"  [Sheets] ERROR: {e}")
+        print(f"  [DB] ERROR: {e}")
         traceback.print_exc()
         return
 
@@ -905,15 +900,15 @@ def run_skiptrace(dry_run: bool = False):
             print(f"    ⚠ {addr or 'unknown'}: {r['_error']}")
 
     if dry_run:
-        print(f"\n  [DRY RUN] Not writing to Sheets.")
+        print(f"\n  [DRY RUN] Not writing to DB.")
         update_skiptraces(results, dry_run=True)
     else:
-        print(f"\n[SHEETS] Writing skip trace results...")
+        print(f"\n[DB] Writing skip trace results...")
         try:
             written = update_skiptraces(results)
             print(f"  Updated {written} row(s).")
         except Exception as e:
-            print(f"  [Sheets] ERROR: {e}")
+            print(f"  [DB] ERROR: {e}")
             traceback.print_exc()
 
     print(f"\n  Run complete: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
@@ -929,18 +924,13 @@ def run_heirresearch(dry_run: bool = False):
     print("=" * 60)
 
     if not dry_run:
-        try:
-            ensure_heir_research_headers()
-        except Exception as e:
-            print(f"  [Sheets] ERROR setting up headers/tabs: {e}")
-            traceback.print_exc()
-            return
+        ensure_heir_research_headers()
 
-    print(f"\n[SHEETS] Fetching listings needing heir research...")
+    print(f"\n[DB] Fetching listings needing heir research...")
     try:
         listings = get_listings_needing_heir_research()
     except Exception as e:
-        print(f"  [Sheets] ERROR: {e}")
+        print(f"  [DB] ERROR: {e}")
         traceback.print_exc()
         return
 
@@ -1007,24 +997,24 @@ def run_heirresearch(dry_run: bool = False):
             print(f"    ⚠ {addr}: {r.get('_error')}")
 
     if dry_run:
-        print(f"\n  [DRY RUN] Not writing to Sheets.")
+        print(f"\n  [DRY RUN] Not writing to DB.")
         update_heir_research(results, dry_run=True)
         write_heir_leads(results, dry_run=True)
     else:
-        print(f"\n[SHEETS] Writing heir research results...")
+        print(f"\n[DB] Writing heir research results...")
         try:
             written = update_heir_research(results)
-            print(f"  Updated {written} Auctions row(s) (AA–AE).")
+            print(f"  Updated {written} Auctions row(s).")
         except Exception as e:
-            print(f"  [Sheets] ERROR writing heir research: {e}")
+            print(f"  [DB] ERROR writing heir research: {e}")
             traceback.print_exc()
 
-        print(f"[SHEETS] Writing Heir Leads tab...")
+        print(f"[DB] Writing heir leads...")
         try:
             added = write_heir_leads(results)
-            print(f"  Added {added} row(s) to 'Heir Leads'.")
+            print(f"  Added {added} row(s) to Heir Leads.")
         except Exception as e:
-            print(f"  [Sheets] ERROR writing heir leads: {e}")
+            print(f"  [DB] ERROR writing heir leads: {e}")
             traceback.print_exc()
 
     print(f"\n  Run complete: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
@@ -1054,18 +1044,18 @@ def run_heir_skiptrace(dry_run: bool = False):
     print(f"  {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     print("=" * 60)
 
-    print(f"\n[SHEETS] Fetching heirs needing skip trace...")
+    print(f"\n[DB] Fetching heirs needing skip trace...")
     try:
         heirs = get_heirs_needing_skiptrace()
     except Exception as e:
-        print(f"  [Sheets] ERROR: {e}")
+        print(f"  [DB] ERROR: {e}")
         traceback.print_exc()
         return
 
     if not heirs:
         print(f"  No heirs need skip tracing.")
         print(f"  (Qualifying: Heir Leads rows where Skip Traced Date col N is blank.)")
-        print(f"\n[SHEETS] Deduplicating phone numbers across heirs...")
+        print(f"\n[DB] Deduplicating phone numbers across heirs...")
         try:
             deduped = dedup_heir_phones(dry_run=dry_run)
             if deduped:
@@ -1073,7 +1063,7 @@ def run_heir_skiptrace(dry_run: bool = False):
             else:
                 print(f"  No duplicate phones found.")
         except Exception as e:
-            print(f"  [Sheets] ERROR during phone dedup: {e}")
+            print(f"  [DB] ERROR during phone dedup: {e}")
             traceback.print_exc()
         return
 
@@ -1147,17 +1137,17 @@ def run_heir_skiptrace(dry_run: bool = False):
             time.sleep(2)
 
         if results:
-            print(f"\n[SHEETS] Writing skip trace results to Heir Leads tab...")
+            print(f"\n[DB] Writing heir skip trace results...")
             try:
                 written = update_heir_skiptraces(results)
                 print(f"  Updated {written} row(s).")
             except Exception as e:
-                print(f"  [Sheets] ERROR: {e}")
+                print(f"  [DB] ERROR: {e}")
                 traceback.print_exc()
         else:
             print(f"\n  Nothing to write (all rows errored).")
 
-    print(f"\n[SHEETS] Deduplicating phone numbers across heirs...")
+    print(f"\n[DB] Deduplicating phone numbers across heirs...")
     try:
         deduped = dedup_heir_phones(dry_run=dry_run)
         if deduped:
@@ -1165,7 +1155,7 @@ def run_heir_skiptrace(dry_run: bool = False):
         else:
             print(f"  No duplicate phones found.")
     except Exception as e:
-        print(f"  [Sheets] ERROR during phone dedup: {e}")
+        print(f"  [DB] ERROR during phone dedup: {e}")
         traceback.print_exc()
 
     print(f"\n{'=' * 60}")

@@ -54,16 +54,16 @@ def run_skiptraces(listings: list[dict], dry_run: bool = False) -> list[dict]:
     """
     Skip trace each listing in `listings`.
 
-    `listings` is the list returned by sheets_writer.get_listings_needing_skiptrace().
-    Each dict has at minimum: Street, City, State, Zip, _row_index.
+    `listings` is the list returned by storage.get_listings_needing_skiptrace().
+    Each dict has at minimum: Street, City, State, Zip, id.
 
     Returns a list of result dicts (one per listing), each containing the
     original listing dict merged with skip trace fields, plus:
-        "_row_index"   — sheet row (1-indexed, passed through from input)
+        "id"           — DB primary key (passed through from input)
         "_skipped"     — True if the API call was skipped (dry run or hard error)
         "_error"       — error message string if the call failed, else None
 
-    sheets_writer.update_skiptraces() consumes this list.
+    storage.update_skiptraces() consumes this list.
     """
     results = []
 
@@ -80,7 +80,7 @@ def run_skiptraces(listings: list[dict], dry_run: bool = False) -> list[dict]:
             continue
 
         if not street:
-            logger.warning(f"  Skipping row {listing.get('_row_index')}: no street address.")
+            logger.warning(f"  Skipping id={listing.get('id')}: no street address.")
             results.append({**listing, "_skipped": True, "_error": "No street address"})
             continue
 

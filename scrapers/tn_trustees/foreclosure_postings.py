@@ -232,84 +232,51 @@ def _parse_date(val) -> str:
 
 def _parse_excel(excel_bytes: bytes) -> list[dict]:
     """
-    Parse the downloaded Excel into a list of row dicts.
-    Columns (0-indexed):
-      0: Posting ID
-      1: Post Type
-      2: Current Sale Date
-      3: County
-      4: Address
-      5: City
-      6: Law Firm
-      7: TS Number
-      8: Sale Status
-
-    Returns list of dicts with keys:
-      posting_id, post_type, sale_date, county, street, city,
-      law_firm_raw, registry_key, ts_number, sale_status
+    Parse the downloaded Excel using pandas (more tolerant of style quirks
+    than raw openpyxl, which rejects certain Fill types in Power Apps exports).
     """
+    import pandas as pd
+
     try:
-        wb = openpyxl.load_workbook(io.BytesIO(excel_bytes), data_only=True)
+        df = pd.read_excel(io.BytesIO(excel_bytes), engine="calamine", dtype=str)
     except Exception as e:
-        logger.error("[foreclosure_postings] openpyxl failed to open Excel: %s", e)
+        logger.error("[foreclosure_postings] pandas failed to read Excel: %s", e)
         return []
 
-    ws = wb.active
-    rows_iter = ws.iter_rows(values_only=True)
+    # Normalise column names to lowercase for robust matching
+    df.columns = [str(c).lower().strip() for c in df.columns]
+    logger.debug("[foreclosure_postings] Excel columns: %s", list(df.columns))
 
-    # Read header row to map column names → indices dynamically
-    # (defensive in case column order changes)
-    header = next(rows_iter, None)
-    if header is None:
-        logger.error("[foreclosure_postings] Excel has no header row")
-        return []
-
-    header_lower = [str(h).lower().strip() if h else "" for h in header]
-    logger.debug("[foreclosure_postings] Excel headers: %s", header_lower)
-
-    def _col(keywords: list[str], default: int) -> int:
-        for i, h in enumerate(header_lower):
-            if any(kw in h for kw in keywords):
-                return i
-        return default
-
-    idx_id      = _col(["posting id", "posting_id"],       0)
-    idx_type    = _col(["post type", "post_type"],          1)
-    idx_date    = _col(["sale date", "sale_date", "current"], 2)
-    idx_county  = _col(["county"],                          3)
-    idx_addr    = _col(["address"],                         4)
-    idx_city    = _col(["city"],                            5)
-    idx_firm    = _col(["law firm", "law_firm", "firm"],    6)
-    idx_ts      = _col(["ts number", "ts_number", "ts #"],  7)
-    idx_status  = _col(["status", "sale status"],           8)
-
-    def cell(row: tuple, idx: int) -> str:
-        return str(row[idx]).strip() if idx < len(row) and row[idx] is not None else ""
-
-    rows = []
     seen_status_values: set[str] = set()
+    rows = []
 
-    for row in rows_iter:
-        if not any(row):
-            continue
+    for _, series in df.iterrows():
+        def cell(*candidates: str) -> str:
+            for key in candidates:
+                val = series.get(key)
+                if val is not None and str(val).strip() not in ("", "nan", "NaT"):
+                    return str(val).strip()
+            return ""
 
-        law_firm_raw = cell(row, idx_firm)
+        law_firm_raw = cell("law firm", "law_firm", "firm")
         registry_key = _resolve_firm(law_firm_raw)
 
-        sale_date    = _parse_date(row[idx_date] if idx_date < len(row) else None)
-        status_raw   = cell(row, idx_status).lower()
+        sale_date_raw = cell("current sale date", "sale date", "saledate", "current_sale_date")
+        sale_date = _parse_date(sale_date_raw)
+
+        status_raw = cell("sale status", "sale_status", "status").lower()
         seen_status_values.add(status_raw)
 
         rows.append({
-            "posting_id":   cell(row, idx_id),
-            "post_type":    cell(row, idx_type),
+            "posting_id":   cell("posting id", "posting_id"),
+            "post_type":    cell("post type", "post_type"),
             "sale_date":    sale_date,
-            "county":       cell(row, idx_county).strip().title(),
-            "street":       cell(row, idx_addr),
-            "city":         cell(row, idx_city),
+            "county":       cell("county").strip().title(),
+            "street":       cell("address"),
+            "city":         cell("city"),
             "law_firm_raw": law_firm_raw,
-            "registry_key": registry_key,   # None if not a target firm
-            "ts_number":    cell(row, idx_ts),
+            "registry_key": registry_key,
+            "ts_number":    cell("ts number", "ts_number", "ts #"),
             "sale_status":  status_raw,
         })
 
@@ -321,8 +288,6 @@ def _parse_excel(excel_bytes: bytes) -> list[dict]:
 
     logger.info("[foreclosure_postings] Parsed %d row(s) from Excel", len(rows))
     return rows
-
-
 # ---------------------------------------------------------------------------
 # Address utilities
 # ---------------------------------------------------------------------------

@@ -66,11 +66,12 @@ TRUSTEE_REGISTRY: dict[str, dict] = {
             "LLG Trustee TN LLC",
             "LLG Trustee TN, LLC",
             "LLG Trustee Tennessee LLC",
-            "LOGS Legal Group LLP",  # parent firm name seen in notices
+            "LOGS Legal Group, LLP",  # ← customer_name on BCN
+            "LOGS Legal Group LLP",
         ],
         "site_url": "https://betterchoicenotices.com/",
-        "scraper": None,
-        "status": "pending",  # was no_scraper; site found, scrapability TBD
+        "scraper": "better_choice_notices",
+        "status": "active",  # was pending
     },
     "arnold_weiss": {
         "canonical_name": "The Law Offices of Arnold M. Weiss, PLLC",
@@ -236,6 +237,19 @@ TRUSTEE_REGISTRY: dict[str, dict] = {
         "site_url": None,
         "scraper":  None,
         "status":   "no_site",
+    },
+    "meyer_burnett": {
+        "canonical_name": "Meyer & Burnett PLLC",
+        "aliases": [
+            "Meyer & Burnett PLLC",
+            "Meyer and Burnett PLLC",
+            "Meyer & Burnett, PLLC",
+            "Meyer and Burnett, PLLC",
+            "Meyer & Burnett",
+        ],
+        "site_url": "https://www.nwpostingservices.com/",
+        "scraper": "nw_posting_services",
+        "status": "active",  # ← was needs_research
     },
     "vylla": {
         "canonical_name": "Vylla Solutions Tennessee LLC",

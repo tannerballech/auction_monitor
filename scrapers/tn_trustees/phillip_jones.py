@@ -172,6 +172,7 @@ def _parse_address(raw: str) -> tuple[str, str, str]:
       3. Split street from city at the last ", " or ". " before the state.
     """
     raw = raw.strip()
+    raw = raw.replace("\n",", ")
 
     # Step 1: find state marker + zip
     m = re.search(r"[,.]?\s+TN\s+(\d{4,5})", raw, re.I)

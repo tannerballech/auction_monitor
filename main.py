@@ -49,10 +49,11 @@ from scrapers.tn_trustees import clear_recon as _cr_scraper
 from scrapers.tn_trustees import phillip_jones as _pj_scraper
 from scrapers.tn_trustees import anchor_posting as _ap_scraper
 from scrapers.tn_trustees import foreclosure_postings as _fp_scraper
+from scrapers.tn_trustees import better_choice_notices as _bcn_scraper
 from gmail_reader import scrape_emails
 
-# ── Sheets ────────────────────────────────────────────────────────────────────
-from sheets_writer import (
+# ── Storage ───────────────────────────────────────────────────────────────────
+from storage import (
     write_new_listings,
     update_blank_fields,
     get_listings_needing_valuation,
@@ -80,8 +81,7 @@ from heir_skiptrace import skip_trace_heir
 
 from scrapers.tn_trustees import rubin_lublin as _rl_scraper
 from scrapers.tn_trustees.registry import lookup_trustee, TRUSTEE_REGISTRY
-from sheets_writer import (
-    # existing imports …
+from storage import (
     get_tn_existing_set,
     get_tn_listings_for_check,
     update_tn_postponements,
@@ -462,6 +462,23 @@ def run_scrape(
         print(f"  [FORECLOSURE POSTINGS] ERROR: {e}")
         traceback.print_exc()
 
+    # ── [BETTER CHOICE NOTICES] — LLG Trustee ─────────────────────────────────
+    print("\n[BETTER CHOICE NOTICES] Fetching TN listings (LLG Trustee)...")
+    if "existing_addr_set" not in dir():
+        existing_addr_set = get_tn_existing_set()
+    try:
+        bcn_listings, _ = _bcn_scraper.scrape_better_choice_notices(
+            existing_addr_set, dry_run=args.dry_run
+        )
+        if bcn_listings:
+            print(f"  {len(bcn_listings)} new listing(s) found.")
+            all_listings.extend(bcn_listings)
+        else:
+            print("  No new listings.")
+    except Exception as e:
+        print(f"  [BETTER CHOICE NOTICES] ERROR: {e}")
+        traceback.print_exc()
+
     # ── Simple web scrapers (Boone only) ──────────────────────────────────────
     if not email_only:
         scrapers_to_run = WEB_SCRAPERS
@@ -506,7 +523,7 @@ def run_scrape(
         print(f"\n  [DRY RUN] Not writing to Sheets.")
         _print_sample(all_listings)
     else:
-        print(f"\n[SHEETS] Writing to Google Sheets...")
+        print(f"\n[DB] Writing new listings...")
         try:
             result = write_new_listings(all_listings)
             print(f"  Added: {result['added']} | Review: {result['needs_review']} | "
@@ -704,6 +721,13 @@ def run_tn_check(dry_run: bool = False, counties: list[str] | None = None) -> No
         elif scraper_name == "foreclosure_postings":
             print(f"\n  [TN CHECK] {canonical} — checking {len(rows)} row(s)...")
             postponements, flags = _fp_scraper.check_existing(rows, dry_run=dry_run)
+            print(f"    {len(postponements)} postponement(s), {len(flags)} manual-check flag(s).")
+            all_postponements.extend(postponements)
+            all_flags.extend(flags)
+
+        elif scraper_name == "better_choice_notices":
+            print(f"\n  [TN CHECK] {canonical} — checking {len(rows)} row(s)...")
+            postponements, flags = _bcn_scraper.check_existing(rows, dry_run=dry_run)
             print(f"    {len(postponements)} postponement(s), {len(flags)} manual-check flag(s).")
             all_postponements.extend(postponements)
             all_flags.extend(flags)

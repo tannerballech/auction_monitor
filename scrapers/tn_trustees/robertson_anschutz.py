@@ -221,18 +221,23 @@ def _addresses_match(site_street: str, site_city: str,
 # ---------------------------------------------------------------------------
 # Core Playwright session — scrape all pages
 # ---------------------------------------------------------------------------
-
 def _scrape_all_pages(page) -> list[dict]:
     """
     Parse all paginated pages of the TN-Sales table.
     Advances pages by clicking the RadSlider "Increase" button.
     Returns combined list of row dicts across all pages.
+
+    Key technical note: clicking .rslIncrease triggers a full ASP.NET
+    __doPostBack page reload (not AJAX). Use expect_navigation() after
+    each click so Playwright properly awaits the new page load before
+    we attempt any DOM operations. Any DOM query between click and full
+    load raises "Execution context was destroyed".
     """
     all_rows: list[dict] = []
     page_num = 1
 
     while True:
-        # Wait for the table to be present before reading content
+        # Wait for table to be present and page to be stable
         try:
             page.wait_for_selector(f"#{TABLE_ID}", timeout=15_000)
         except Exception:
@@ -241,35 +246,60 @@ def _scrape_all_pages(page) -> list[dict]:
 
         html = page.content()
         rows = _parse_table_html(html)
-        logger.info(
-            "[robertson_anschutz] Page %d: %d row(s)", page_num, len(rows)
-        )
+        logger.info("[robertson_anschutz] Page %d: %d row(s)", page_num, len(rows))
         all_rows.extend(rows)
 
-        # Check current/total page from label
-        label = page.query_selector(".rgSliderLabel")
-        if label:
-            label_text = label.inner_text()
-            m = re.search(r"Page\s+(\d+)\s+of\s+(\d+)", label_text)
-            if m:
-                current = int(m.group(1))
-                total   = int(m.group(2))
-                if current >= total:
-                    break
+        # Read page label while DOM is stable
+        try:
+            label = page.query_selector(".rgSliderLabel")
+            if label:
+                label_text = label.inner_text()
+                m = re.search(r"Page\s+(\d+)\s+of\s+(\d+)", label_text)
+                if m:
+                    current = int(m.group(1))
+                    total   = int(m.group(2))
+                    logger.info("[robertson_anschutz] %s", label_text.strip())
+                    if current >= total:
+                        break
+        except Exception as e:
+            logger.warning("[robertson_anschutz] Could not read page label: %s", e)
+            break
 
-        # Advance to next page
-        increase_btn = page.query_selector(".rslIncrease")
+        # Find advance button while DOM is stable
+        try:
+            increase_btn = page.query_selector(".rslIncrease")
+        except Exception:
+            break
         if not increase_btn:
             break
 
-        increase_btn.click()
+        # Click triggers a full ASP.NET postback (page reload).
+        # expect_navigation() waits for the navigation to complete before
+        # returning, preventing "Execution context was destroyed" errors.
+        # Replace the single expect_navigation block with:
+        for nav_attempt in range(2):
+            try:
+                with page.expect_navigation(timeout=30_000, wait_until="domcontentloaded"):
+                    if nav_attempt == 0:
+                        increase_btn.click()
+                    else:
+                        # Retry: re-find and click the button
+                        btn = page.query_selector(".rslIncrease")
+                        if btn:
+                            btn.click()
+                        else:
+                            break
+                break  # success
+            except Exception as e:
+                if nav_attempt == 1:
+                    logger.warning(
+                        "[robertson_anschutz] Navigation after page %d failed after retry: %s",
+                        page_num, e,
+                    )
 
-        # Wait for table to update — row count or page label changes
-        page.wait_for_timeout(3_000)
         page_num += 1
-
         if page_num > 20:
-            logger.warning("[robertson_anschutz] Hit page cap — stopping pagination")
+            logger.warning("[robertson_anschutz] Hit page cap — stopping")
             break
 
     logger.info("[robertson_anschutz] Total rows across all pages: %d", len(all_rows))

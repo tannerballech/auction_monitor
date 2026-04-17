@@ -97,7 +97,8 @@ CHECK_WINDOW_DAYS = 14
 
 # Registry keys for firms confirmed to use this platform.
 # Rows attributed to other firms are skipped (but logged).
-_TARGET_FIRMS: set[str] = {"marinosci", "albertelli_alaw"}
+_TARGET_FIRMS: set[str] = {"marinosci", "albertelli_alaw", "meyer_burnett"}
+
 
 _HEADERS = {
     "User-Agent": (
@@ -139,6 +140,7 @@ _TRUSTEE_PATTERNS: list[tuple[str, re.Pattern]] = [
     ("padgett_law",        re.compile(r"padgett",                                 re.I)),
     ("mickel_law",         re.compile(r"mickel",                                  re.I)),
     ("llg_trustee",        re.compile(r"logs\s*legal|llg\s*trustee",              re.I)),
+    ("meyer_burnett", re.compile(r"meyer\s*(?:&|and)\s*burnett", re.I)),
 ]
 
 

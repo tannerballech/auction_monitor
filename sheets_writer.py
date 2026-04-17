@@ -77,6 +77,7 @@ from googleapiclient.discovery import build
 import sys
 sys.path.insert(0, os.path.dirname(__file__))
 from config import SPREADSHEET_ID
+from scrapers.base import normalize_county
 
 
 # ---------------------------------------------------------------------------
@@ -437,9 +438,6 @@ def write_new_listings(listings: list[dict], dry_run: bool = False) -> dict:
     _ensure_header(TAB_REVIEW, HEADER_REVIEW)
 
     existing_keys = _build_existing_keys(_get_all_rows(TAB_MAIN))
-    # Secondary 3-tuple index (county, street_num, sale_date) — no defendant.
-    # Used to catch cross-source dupes where TNLedger has a defendant name
-    # but a trustee scraper doesn't (both would otherwise pass the 4-tuple check).
     existing_keys_3: set[tuple] = {(c, s, d) for (c, s, d, _) in existing_keys}
     seen_this_batch: set[tuple] = set()
     seen_this_batch_3: set[tuple] = set()
@@ -448,6 +446,11 @@ def write_new_listings(listings: list[dict], dry_run: bool = False) -> dict:
     counts = {"added": 0, "needs_review": 0, "skipped_too_soon": 0, "skipped_duplicate": 0}
 
     for listing in listings:
+        # Normalize county name in-place before any processing.
+        # Fixes str.title() mangling of Mc-prefixed counties (McMinn → Mcminn)
+        # and known source typos (Reah → Rhea, Dekalb → DeKalb).
+        listing["County"] = normalize_county(listing.get("County", "").strip())
+
         street    = listing.get("Street", "").strip()
         sale_date = listing.get("Sale Date", "").strip()
 
@@ -475,8 +478,6 @@ def write_new_listings(listings: list[dict], dry_run: bool = False) -> dict:
 
         is_dup = key in existing_keys or key in seen_this_batch
         if not is_dup and last_name == "":
-            # No defendant (trustee scraper) — secondary check ignoring defendant
-            # catches properties that TNLedger already wrote with a defendant name.
             key_3 = key[:3]
             is_dup = key_3 in existing_keys_3 or key_3 in seen_this_batch_3
 
@@ -506,7 +507,6 @@ def write_new_listings(listings: list[dict], dry_run: bool = False) -> dict:
         f"Duplicates {counts['skipped_duplicate']}"
     )
     return {**counts, "dry_run": dry_run}
-
 
 def get_existing_case_numbers(county: str) -> dict[str, tuple[int, bool]]:
     rows   = _get_all_rows(TAB_MAIN)
@@ -788,13 +788,19 @@ def update_skiptraces(results: list[dict], dry_run: bool = False) -> int:
     if not data:
         return 0
 
-    _get_service().spreadsheets().values().batchUpdate(
-        spreadsheetId=SPREADSHEET_ID,
-        body={"valueInputOption": "RAW", "data": data},
-    ).execute()
+    # Write in chunks of 200 range entries (~28 rows per chunk).
+    # A single batchUpdate with 184 rows × 7 cols = 1,288 entries causes
+    # WinError 10053 (connection aborted) on Windows due to payload size.
+    CHUNK_SIZE = 200
+    svc = _get_service()
+    for i in range(0, len(data), CHUNK_SIZE):
+        chunk = data[i:i + CHUNK_SIZE]
+        svc.spreadsheets().values().batchUpdate(
+            spreadsheetId=SPREADSHEET_ID,
+            body={"valueInputOption": "RAW", "data": chunk},
+        ).execute()
+
     return sum(1 for r in results if not r.get("_skipped"))
-
-
 # ---------------------------------------------------------------------------
 # Public API — Heir research pipeline (Phase 4)
 # ---------------------------------------------------------------------------

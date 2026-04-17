@@ -10,3 +10,6 @@ lxml>=5.1.0
 playwright
 python-dotenv
 pdfplumber
+openpyxl
+pandas
+python-calamine

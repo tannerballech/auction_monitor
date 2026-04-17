@@ -20,7 +20,7 @@ Usage (from main.py --heirresearch):
     results = run_heir_research(listings, dry_run=False)
 
 Output contract per result dict:
-    _row_index          int   — passed through from input
+    id                  int   — DB primary key, passed through from input
     _skipped            bool  — True if dry run or unrecoverable error
     _error              str|None
     _heirs_list         list  — [{"name": str, "relationship": str}, ...]
@@ -76,8 +76,8 @@ def run_heir_research(listings: list[dict], dry_run: bool = False) -> list[dict]
     Research obituaries for all listings in `listings`.
 
     `listings` is the list returned by
-    sheets_writer.get_listings_needing_heir_research(). Each dict has at
-    minimum: _row_index, Street, City, County, State, Defendant(s),
+    storage.get_listings_needing_heir_research(). Each dict has at
+    minimum: id, Street, City, County, State, Defendant(s),
     Owner Name (Primary).
 
     Returns a list of result dicts consumed by:

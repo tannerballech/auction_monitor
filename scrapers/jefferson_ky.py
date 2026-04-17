@@ -8,7 +8,7 @@ import requests
 import anthropic
 
 from scrapers.base import empty_listing, normalize_date, clean_money
-from sheets_writer import MIN_DAYS_OUT
+from storage import MIN_DAYS_OUT
 from config import ANTHROPIC_API_KEY, DEFAULT_HEADERS
 
 CSV_URL = "https://www.jeffcomm.org/docs/webPush.csv"

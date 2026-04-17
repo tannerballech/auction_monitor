@@ -17,13 +17,13 @@ Equity signal buckets (from config.py → EQUITY_THRESHOLDS):
 Address: listings carry Street / City / State / Zip as separate fields
 (refactored April 2026). No address parsing needed here.
 
-Key contract with sheets_writer.update_valuations():
+Key contract with storage.update_valuations():
   run_valuations() returns dicts that include ALL of these title-case keys:
     "Estimated Market Value"  — formatted dollar string  e.g. "$209,799"
     "Estimated Equity"        — formatted dollar string  e.g. "$186,906"
     "Equity Signal"           — emoji                    e.g. "🏆"
     "Notes"                   — full notes string (confidence already embedded)
-    "_row_index"              — int, from get_listings_needing_valuation()
+    "id"                      — int, DB primary key from get_listings_needing_valuation()
 
   It also carries snake_case keys for display in run_valuate():
     "emv", "debt", "equity_signal"
@@ -145,7 +145,7 @@ def valuate_listing(listing: dict) -> dict | None:
     if not street:
         logger.warning(
             f"[valuation] Skipping — no street for "
-            f"{listing.get('County', '?')} row {listing.get('_row_index', '?')}"
+            f"{listing.get('County', '?')} id={listing.get('id', '?')}"
         )
         return None
 
@@ -298,7 +298,7 @@ def run_valuations(listings: list[dict], dry_run: bool = False) -> list[dict]:
             )
 
             results.append({
-                # Pass-through listing fields (_row_index, County, State, etc.)
+                # Pass-through listing fields (id, County, State, etc.)
                 **listing,
                 # Snake-case for display in run_valuate()
                 "emv":           emv,

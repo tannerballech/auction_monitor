@@ -82,8 +82,12 @@ CREATE TABLE IF NOT EXISTS listings (
     notes               TEXT,
 
     -- skip trace (phase 3)
-    owner_primary       TEXT,
-    owner_secondary     TEXT,
+    owner_primary           TEXT,
+    owner_secondary         TEXT,
+    owner_first             TEXT,       -- first (+ middle) name, primary owner
+    owner_last              TEXT,       -- last name, primary owner
+    owner_secondary_first   TEXT,       -- first (+ middle) name, secondary owner
+    owner_secondary_last    TEXT,       -- last name, secondary owner
     owner_phones        TEXT,
     owner_emails        TEXT,
     mailing_address     TEXT,
@@ -150,6 +154,41 @@ CREATE TABLE IF NOT EXISTS needs_review (
 def init_db() -> None:
     with _conn() as con:
         con.executescript(_DDL)
+    _migrate_owner_name_cols()
+
+
+def _migrate_owner_name_cols() -> None:
+    """
+    Add owner first/last name columns if they don't exist yet (schema migration),
+    then backfill all rows that have owner_primary populated but owner_first empty.
+    Safe to call repeatedly — no-ops once columns exist and backfill is done.
+    """
+    new_cols = [
+        "owner_first",
+        "owner_last",
+        "owner_secondary_first",
+        "owner_secondary_last",
+    ]
+    with _conn() as con:
+        existing = {row[1] for row in con.execute("PRAGMA table_info(listings)").fetchall()}
+        for col in new_cols:
+            if col not in existing:
+                con.execute(f"ALTER TABLE listings ADD COLUMN {col} TEXT DEFAULT ''")
+
+        # Backfill rows that have a primary name but empty first/last
+        rows = con.execute(
+            "SELECT id, owner_primary, owner_secondary FROM listings "
+            "WHERE (owner_primary IS NOT NULL AND owner_primary != '') "
+            "  AND (owner_first IS NULL OR owner_first = '')"
+        ).fetchall()
+        for row in rows:
+            first, last         = _split_name(row["owner_primary"]  or "")
+            sec_first, sec_last = _split_name(row["owner_secondary"] or "")
+            con.execute(
+                "UPDATE listings SET owner_first=?, owner_last=?, "
+                "owner_secondary_first=?, owner_secondary_last=? WHERE id=?",
+                (first, last, sec_first, sec_last, row["id"]),
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -161,6 +200,22 @@ def _extract_street_number(street: str) -> str:
         return ""
     m = re.match(r"^(\d+)", street.strip())
     return m.group(1) if m else ""
+
+
+def _split_name(full_name: str) -> tuple[str, str]:
+    """
+    Split a full name string into (first, last).
+    'John Smith'        → ('John', 'Smith')
+    'Mary Jane Watson'  → ('Mary Jane', 'Watson')
+    'Madonna'           → ('Madonna', '')
+    Returns ('', '') for blank input.
+    """
+    parts = (full_name or "").strip().split()
+    if not parts:
+        return "", ""
+    if len(parts) == 1:
+        return parts[0], ""
+    return " ".join(parts[:-1]), parts[-1]
 
 
 def _parse_sale_date(s: str) -> date | None:
@@ -316,20 +371,33 @@ def get_listings_needing_skiptrace() -> list[dict]:
 
 
 def update_skiptrace(listing_id: int, result: dict) -> None:
+    owner_primary   = result.get("Owner Name (Primary)", "")
+    owner_secondary = result.get("Owner Name (Secondary)", "")
+    first, last         = _split_name(owner_primary)
+    sec_first, sec_last = _split_name(owner_secondary)
+
     sql = """
         UPDATE listings SET
-            owner_primary   = ?,
-            owner_secondary = ?,
-            owner_phones    = ?,
-            owner_emails    = ?,
-            mailing_address = ?,
-            deceased        = ?,
-            skiptrace_date  = ?
+            owner_primary           = ?,
+            owner_secondary         = ?,
+            owner_first             = ?,
+            owner_last              = ?,
+            owner_secondary_first   = ?,
+            owner_secondary_last    = ?,
+            owner_phones            = ?,
+            owner_emails            = ?,
+            mailing_address         = ?,
+            deceased                = ?,
+            skiptrace_date          = ?
         WHERE id = ?
     """
     params = (
-        result.get("Owner Name (Primary)", ""),
-        result.get("Owner Name (Secondary)", ""),
+        owner_primary,
+        owner_secondary,
+        first,
+        last,
+        sec_first,
+        sec_last,
         result.get("Owner Phone(s)", ""),
         result.get("Owner Email(s)", ""),
         result.get("Mailing Address", ""),

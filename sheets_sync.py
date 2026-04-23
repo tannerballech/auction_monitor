@@ -55,9 +55,11 @@ AUCTIONS_COLS: list[tuple[str, str]] = [
     ("Estimated Equity",        "est_equity"),
     ("Equity Signal",           "equity_signal"),
     ("Notes",                   "notes"),
-    ("Owner Name (Primary)",    "owner_primary"),
-    ("Owner Name (Secondary)",  "owner_secondary"),
-    ("Owner Phone(s)",          "owner_phones"),
+    ("Owner First Name",                "owner_first"),
+    ("Owner Last Name",                 "owner_last"),
+    ("Owner First Name (Secondary)",    "owner_secondary_first"),
+    ("Owner Last Name (Secondary)",     "owner_secondary_last"),
+    ("Owner Phone(s)",                  "owner_phones"),
     ("Owner Email(s)",          "owner_emails"),
     ("Mailing Address",         "mailing_address"),
     ("Deceased",                "deceased"),
@@ -187,10 +189,27 @@ def _clear_and_write(svc, tab: str, values: list[list[Any]]) -> None:
 # ── DB reads ──────────────────────────────────────────────────────────────────
 
 def _read_all_listings() -> list[dict]:
+    """
+    Return listings that meet equity criteria, sorted by signal priority:
+      🏆 first → ✅ → ❓ / blank (not yet valuated) last.
+    Rows with ⚠️ or ❌ are excluded — below the threshold we act on.
+    Within each signal group, upcoming sale dates come first.
+    """
     with _conn() as con:
-        rows = con.execute(
-            "SELECT * FROM listings ORDER BY sale_date DESC, id DESC"
-        ).fetchall()
+        rows = con.execute("""
+            SELECT * FROM listings
+            WHERE equity_signal IN ('🏆', '✅', '❓')
+               OR equity_signal IS NULL
+               OR equity_signal = ''
+            ORDER BY
+              CASE equity_signal
+                WHEN '🏆' THEN 1
+                WHEN '✅' THEN 2
+                ELSE 3
+              END,
+              sale_date ASC,
+              id
+        """).fetchall()
     return [_row_to_dict(r) for r in rows]
 
 

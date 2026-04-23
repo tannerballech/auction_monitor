@@ -82,6 +82,7 @@ from heir_skiptrace import skip_trace_heir
 from sheets_sync import sync_to_sheets
 from ingest_directskip import ingest as ingest_directskip
 from phoneburner_export import generate as generate_phoneburner
+from propai_export import generate as generate_propai
 from scrapers.tn_trustees import rubin_lublin as _rl_scraper
 from scrapers.tn_trustees.registry import lookup_trustee, TRUSTEE_REGISTRY
 from storage import (
@@ -1263,6 +1264,11 @@ if __name__ == "__main__":
         action="store_true",
         help="Export a PhoneBurner upload CSV (sales 5–30 days out, 🏆/✅, DirectSkip data required).",
     )
+    parser.add_argument(
+        "--propai",
+        action="store_true",
+        help="Export a Prop.ai upload CSV (sales 5–30 days out, 🏆/✅, DirectSkip data required).",
+    )
 
     args = parser.parse_args()
 
@@ -1272,6 +1278,12 @@ if __name__ == "__main__":
         print(f"  {datetime.now().strftime('%Y-%m-%d %H:%M')}")
         print("=" * 60)
         generate_phoneburner(dry_run=args.dry_run)
+    elif args.propai:
+        print("=" * 60)
+        print(f"  Eagle Creek Auction Monitor — Prop.ai Export")
+        print(f"  {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+        print("=" * 60)
+        generate_propai(dry_run=args.dry_run)
     elif args.ingest_directskip:
         counts = ingest_directskip(args.ingest_directskip, dry_run=args.dry_run)
         if not args.dry_run:

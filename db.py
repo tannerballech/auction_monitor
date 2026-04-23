@@ -130,6 +130,58 @@ CREATE TABLE IF NOT EXISTS heir_leads (
     status              TEXT
 );
 
+CREATE TABLE IF NOT EXISTS directskip_persons (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    listing_id      INTEGER REFERENCES listings(id),
+    person_number   INTEGER NOT NULL,   -- 1, 2, or 3
+
+    result_code     TEXT,               -- AB1 / AB2 / CI / etc. (person 1 only)
+    first_name      TEXT,
+    last_name       TEXT,
+    age             TEXT,
+    deceased        TEXT,               -- Y or N
+
+    phone1 TEXT, phone1_type TEXT,
+    phone2 TEXT, phone2_type TEXT,
+    phone3 TEXT, phone3_type TEXT,
+    phone4 TEXT, phone4_type TEXT,
+    phone5 TEXT, phone5_type TEXT,
+    phone6 TEXT, phone6_type TEXT,
+    phone7 TEXT, phone7_type TEXT,
+
+    email1          TEXT,
+    email2          TEXT,
+
+    mailing_street  TEXT,
+    mailing_city    TEXT,
+    mailing_state   TEXT,
+    mailing_zip     TEXT,
+
+    UNIQUE (listing_id, person_number)
+);
+
+CREATE TABLE IF NOT EXISTS directskip_relatives (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    listing_id      INTEGER REFERENCES listings(id),
+    person_number   INTEGER NOT NULL,   -- which owner (1/2/3) this relative belongs to
+    relative_number INTEGER NOT NULL,   -- 1–5
+
+    name            TEXT,
+    age             TEXT,
+
+    phone1 TEXT, phone1_type TEXT,
+    phone2 TEXT, phone2_type TEXT,
+    phone3 TEXT, phone3_type TEXT,
+    phone4 TEXT, phone4_type TEXT,
+    phone5 TEXT, phone5_type TEXT,
+
+    -- for future proximity-based calling campaign
+    called          INTEGER DEFAULT 0,
+    call_date       TEXT,
+
+    UNIQUE (listing_id, person_number, relative_number)
+);
+
 CREATE TABLE IF NOT EXISTS needs_review (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     county      TEXT,

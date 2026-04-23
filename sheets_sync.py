@@ -29,6 +29,8 @@ TAB_AUCTIONS     = "Auctions"
 TAB_HEIR_LEADS   = "Heir Leads"
 TAB_NEEDS_REVIEW = "Needs Review"
 TAB_DIRECTSKIP   = "DirectSkip"
+TAB_DS_PERSONS   = "DS Persons"
+TAB_DS_RELATIVES = "DS Relatives"
 
 # ── Column definitions ────────────────────────────────────────────────────────
 #
@@ -332,6 +334,114 @@ def _build_directskip_rows() -> list[list]:
     return result
 
 
+# ── DirectSkip Persons / Relatives tabs ──────────────────────────────────────
+
+DS_PERSONS_HEADERS = [
+    "Listing ID", "County", "State", "Sale Date", "Property Street",
+    "Person #", "Result Code",
+    "First Name", "Last Name", "Age", "Deceased",
+    "Phone 1", "Phone 1 Type", "Phone 2", "Phone 2 Type",
+    "Phone 3", "Phone 3 Type", "Phone 4", "Phone 4 Type",
+    "Phone 5", "Phone 5 Type", "Phone 6", "Phone 6 Type",
+    "Phone 7", "Phone 7 Type",
+    "Email 1", "Email 2",
+    "Mailing Street", "Mailing City", "Mailing State", "Mailing Zip",
+]
+
+DS_RELATIVES_HEADERS = [
+    "Listing ID", "County", "State", "Sale Date", "Property Street",
+    "Person #", "Relative #",
+    "Name", "Age",
+    "Phone 1", "Phone 1 Type", "Phone 2", "Phone 2 Type",
+    "Phone 3", "Phone 3 Type", "Phone 4", "Phone 4 Type",
+    "Phone 5", "Phone 5 Type",
+    "Called", "Call Date",
+]
+
+
+def _build_ds_persons_rows() -> list[list]:
+    """Join directskip_persons with listings for context columns."""
+    with _conn() as con:
+        rows = con.execute("""
+            SELECT
+                p.listing_id, l.county, l.state, l.sale_date, l.street,
+                p.person_number, p.result_code,
+                p.first_name, p.last_name, p.age, p.deceased,
+                p.phone1, p.phone1_type, p.phone2, p.phone2_type,
+                p.phone3, p.phone3_type, p.phone4, p.phone4_type,
+                p.phone5, p.phone5_type, p.phone6, p.phone6_type,
+                p.phone7, p.phone7_type,
+                p.email1, p.email2,
+                p.mailing_street, p.mailing_city, p.mailing_state, p.mailing_zip
+            FROM directskip_persons p
+            JOIN listings l ON l.id = p.listing_id
+            ORDER BY p.listing_id, p.person_number
+        """).fetchall()
+
+    result = [DS_PERSONS_HEADERS]
+    for r in rows:
+        result.append([
+            r[0],                       # listing_id
+            (r[1] or "").title(),       # county
+            r[2] or "",                 # state
+            r[3] or "",                 # sale_date
+            r[4] or "",                 # street
+            r[5],                       # person_number
+            r[6] or "",                 # result_code
+            r[7] or "",  r[8] or "",   # first, last
+            r[9] or "",  r[10] or "",  # age, deceased
+            r[11] or "", r[12] or "",  # phone1, type
+            r[13] or "", r[14] or "",  # phone2, type
+            r[15] or "", r[16] or "",  # phone3, type
+            r[17] or "", r[18] or "",  # phone4, type
+            r[19] or "", r[20] or "",  # phone5, type
+            r[21] or "", r[22] or "",  # phone6, type
+            r[23] or "", r[24] or "",  # phone7, type
+            r[25] or "", r[26] or "",  # email1, email2
+            r[27] or "", r[28] or "", r[29] or "", r[30] or "",  # mailing
+        ])
+    return result
+
+
+def _build_ds_relatives_rows() -> list[list]:
+    """Join directskip_relatives with listings for context columns."""
+    with _conn() as con:
+        rows = con.execute("""
+            SELECT
+                r.listing_id, l.county, l.state, l.sale_date, l.street,
+                r.person_number, r.relative_number,
+                r.name, r.age,
+                r.phone1, r.phone1_type, r.phone2, r.phone2_type,
+                r.phone3, r.phone3_type, r.phone4, r.phone4_type,
+                r.phone5, r.phone5_type,
+                r.called, r.call_date
+            FROM directskip_relatives r
+            JOIN listings l ON l.id = r.listing_id
+            WHERE r.name IS NOT NULL AND r.name != ''
+            ORDER BY r.listing_id, r.person_number, r.relative_number
+        """).fetchall()
+
+    result = [DS_RELATIVES_HEADERS]
+    for r in rows:
+        result.append([
+            r[0],                       # listing_id
+            (r[1] or "").title(),       # county
+            r[2] or "",                 # state
+            r[3] or "",                 # sale_date
+            r[4] or "",                 # street
+            r[5],                       # person_number
+            r[6],                       # relative_number
+            r[7] or "",  r[8] or "",   # name, age
+            r[9] or "",  r[10] or "",  # phone1, type
+            r[11] or "", r[12] or "",  # phone2, type
+            r[13] or "", r[14] or "",  # phone3, type
+            r[15] or "", r[16] or "",  # phone4, type
+            r[17] or "", r[18] or "",  # phone5, type
+            r[19] or 0,  r[20] or "",  # called, call_date
+        ])
+    return result
+
+
 # ── Public entry point ────────────────────────────────────────────────────────
 
 def sync_to_sheets() -> None:
@@ -347,7 +457,8 @@ def sync_to_sheets() -> None:
         meta            = svc.spreadsheets().get(spreadsheetId=SPREADSHEET_ID).execute()
         existing_titles = {s["properties"]["title"] for s in meta.get("sheets", [])}
 
-        for title in (TAB_AUCTIONS, TAB_HEIR_LEADS, TAB_NEEDS_REVIEW, TAB_DIRECTSKIP):
+        for title in (TAB_AUCTIONS, TAB_HEIR_LEADS, TAB_NEEDS_REVIEW,
+                      TAB_DIRECTSKIP, TAB_DS_PERSONS, TAB_DS_RELATIVES):
             _ensure_tab(svc, title, existing_titles)
 
         # ── Auctions ──────────────────────────────────────────────────────────
@@ -368,10 +479,20 @@ def sync_to_sheets() -> None:
         _clear_and_write(svc, TAB_NEEDS_REVIEW, values)
         logger.info(f"  [SYNC] Needs Review: {len(review)} row(s) written.")
 
-        # ── DirectSkip ────────────────────────────────────────────────────────
+        # ── DirectSkip (upload queue) ─────────────────────────────────────────
         ds_rows = _build_directskip_rows()
         _clear_and_write(svc, TAB_DIRECTSKIP, ds_rows)
         logger.info(f"  [SYNC] DirectSkip: {len(ds_rows) - 1} row(s) written.")
+
+        # ── DS Persons ────────────────────────────────────────────────────────
+        dsp_rows = _build_ds_persons_rows()
+        _clear_and_write(svc, TAB_DS_PERSONS, dsp_rows)
+        logger.info(f"  [SYNC] DS Persons: {len(dsp_rows) - 1} row(s) written.")
+
+        # ── DS Relatives ──────────────────────────────────────────────────────
+        dsr_rows = _build_ds_relatives_rows()
+        _clear_and_write(svc, TAB_DS_RELATIVES, dsr_rows)
+        logger.info(f"  [SYNC] DS Relatives: {len(dsr_rows) - 1} row(s) written.")
 
     except Exception as e:
         logger.error(f"  [SYNC] Sheets sync failed: {e}")

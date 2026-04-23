@@ -80,6 +80,7 @@ from heir_research import run_heir_research
 from heir_skiptrace import skip_trace_heir
 
 from sheets_sync import sync_to_sheets
+from ingest_directskip import ingest as ingest_directskip
 from scrapers.tn_trustees import rubin_lublin as _rl_scraper
 from scrapers.tn_trustees.registry import lookup_trustee, TRUSTEE_REGISTRY
 from storage import (
@@ -1251,10 +1252,21 @@ if __name__ == "__main__":
         action="store_true",
         help="Cross-check active TN listings against live trustee sites for postponements/cancellations.",
     )
+    parser.add_argument(
+        "--ingest-directskip",
+        metavar="CSV_PATH",
+        help="Ingest a DirectSkip results CSV into the database.",
+    )
 
     args = parser.parse_args()
 
-    if args.valuate:
+    if args.ingest_directskip:
+        counts = ingest_directskip(args.ingest_directskip, dry_run=args.dry_run)
+        if not args.dry_run:
+            print(f"\n[SYNC] Syncing DB → Sheets...")
+            sync_to_sheets()
+            print(f"  Sync complete.")
+    elif args.valuate:
         run_valuate(counties=args.county, dry_run=args.dry_run)
     elif args.skiptrace:
         run_skiptrace(dry_run=args.dry_run)

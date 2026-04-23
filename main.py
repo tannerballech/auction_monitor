@@ -81,6 +81,7 @@ from heir_skiptrace import skip_trace_heir
 
 from sheets_sync import sync_to_sheets
 from ingest_directskip import ingest as ingest_directskip
+from phoneburner_export import generate as generate_phoneburner
 from scrapers.tn_trustees import rubin_lublin as _rl_scraper
 from scrapers.tn_trustees.registry import lookup_trustee, TRUSTEE_REGISTRY
 from storage import (
@@ -1257,10 +1258,21 @@ if __name__ == "__main__":
         metavar="CSV_PATH",
         help="Ingest a DirectSkip results CSV into the database.",
     )
+    parser.add_argument(
+        "--phoneburner",
+        action="store_true",
+        help="Export a PhoneBurner upload CSV (sales 5–30 days out, 🏆/✅, DirectSkip data required).",
+    )
 
     args = parser.parse_args()
 
-    if args.ingest_directskip:
+    if args.phoneburner:
+        print("=" * 60)
+        print(f"  Eagle Creek Auction Monitor — PhoneBurner Export")
+        print(f"  {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+        print("=" * 60)
+        generate_phoneburner(dry_run=args.dry_run)
+    elif args.ingest_directskip:
         counts = ingest_directskip(args.ingest_directskip, dry_run=args.dry_run)
         if not args.dry_run:
             print(f"\n[SYNC] Syncing DB → Sheets...")

@@ -25,9 +25,10 @@ logger = logging.getLogger(__name__)
 
 # ── Tab names ─────────────────────────────────────────────────────────────────
 
-TAB_AUCTIONS    = "Auctions"
-TAB_HEIR_LEADS  = "Heir Leads"
+TAB_AUCTIONS     = "Auctions"
+TAB_HEIR_LEADS   = "Heir Leads"
 TAB_NEEDS_REVIEW = "Needs Review"
+TAB_DIRECTSKIP   = "DirectSkip"
 
 # ── Column definitions ────────────────────────────────────────────────────────
 #
@@ -229,6 +230,108 @@ def _read_all_needs_review() -> list[dict]:
     return [_row_to_dict(r) for r in rows]
 
 
+def _split_mailing_address(addr: str) -> tuple[str, str, str, str]:
+    """
+    Parse a mailing address string (from skiptrace._extract_mailing_address)
+    into (street, city, state, zip).
+
+    Expected format: "123 Main St, Louisville, KY 40202"
+    Handles partial / missing components gracefully.
+    """
+    if not (addr or "").strip():
+        return "", "", "", ""
+    parts = [p.strip() for p in addr.split(",")]
+    street = parts[0] if parts else ""
+    city   = parts[1] if len(parts) > 1 else ""
+    state = zip_ = ""
+    if len(parts) > 2:
+        state_zip = parts[2].strip().split()
+        state = state_zip[0] if state_zip else ""
+        zip_  = state_zip[1] if len(state_zip) > 1 else ""
+    return street, city, state, zip_
+
+
+# DirectSkip column headers match the upload template exactly.
+DIRECTSKIP_HEADERS = [
+    "First Name", "Last Name",
+    "Property Address", "Property City", "Property State", "Property Zip",
+    "Mailing Address", "Mailing City", "Mailing State", "Mailing Zip",
+    "Custom Field 1", "Custom Field 2", "Custom Field 3",
+]
+
+
+def _build_directskip_rows() -> list[list]:
+    """
+    Build DirectSkip upload rows from qualifying listings.
+
+    Inclusion criteria:
+      - equity_signal IN (🏆, ✅, ❓) or blank (not yet valuated)
+      - sale_date >= today (upcoming only)
+      - not cancelled
+      - owner_last is populated (must have been skip-traced)
+      - street is populated
+
+    Mailing address: use BatchData mailing_address if present;
+    fall back to property address (street/city/state/zip).
+
+    Custom fields: Equity Signal | Sale Date | County
+    """
+    from datetime import date as _date
+    today = _date.today().isoformat()
+
+    with _conn() as con:
+        rows = con.execute("""
+            SELECT * FROM listings
+            WHERE (owner_last IS NOT NULL AND owner_last != '')
+              AND (street     IS NOT NULL AND street     != '')
+              AND (cancelled  IS NULL OR LOWER(cancelled) != 'yes')
+              AND sale_date >= ?
+              AND (
+                    equity_signal IN ('🏆', '✅', '❓')
+                    OR equity_signal IS NULL
+                    OR equity_signal = ''
+              )
+            ORDER BY
+              CASE equity_signal
+                WHEN '🏆' THEN 1
+                WHEN '✅' THEN 2
+                ELSE 3
+              END,
+              sale_date ASC,
+              id
+        """, (today,)).fetchall()
+
+    result = [DIRECTSKIP_HEADERS]
+    for r in rows:
+        mailing_raw = (r["mailing_address"] or "").strip()
+        if mailing_raw:
+            m_street, m_city, m_state, m_zip = _split_mailing_address(mailing_raw)
+        else:
+            # Fall back to property address
+            m_street = r["street"] or ""
+            m_city   = r["city"]   or ""
+            m_state  = r["state"]  or ""
+            m_zip    = r["zip"]    or ""
+
+        result.append([
+            r["owner_first"] or "",
+            r["owner_last"]  or "",
+            r["street"]      or "",
+            r["city"]        or "",
+            r["state"]       or "",
+            r["zip"]         or "",
+            m_street,
+            m_city,
+            m_state,
+            m_zip,
+            r["equity_signal"] or "",   # Custom Field 1
+            r["sale_date"]     or "",   # Custom Field 2
+            (r["county"] or "").title(), # Custom Field 3
+        ])
+
+    return result
+
+
 # ── Public entry point ────────────────────────────────────────────────────────
 
 def sync_to_sheets() -> None:
@@ -244,7 +347,7 @@ def sync_to_sheets() -> None:
         meta            = svc.spreadsheets().get(spreadsheetId=SPREADSHEET_ID).execute()
         existing_titles = {s["properties"]["title"] for s in meta.get("sheets", [])}
 
-        for title in (TAB_AUCTIONS, TAB_HEIR_LEADS, TAB_NEEDS_REVIEW):
+        for title in (TAB_AUCTIONS, TAB_HEIR_LEADS, TAB_NEEDS_REVIEW, TAB_DIRECTSKIP):
             _ensure_tab(svc, title, existing_titles)
 
         # ── Auctions ──────────────────────────────────────────────────────────
@@ -264,6 +367,11 @@ def sync_to_sheets() -> None:
         values = _rows_to_values(review, NEEDS_REVIEW_COLS)
         _clear_and_write(svc, TAB_NEEDS_REVIEW, values)
         logger.info(f"  [SYNC] Needs Review: {len(review)} row(s) written.")
+
+        # ── DirectSkip ────────────────────────────────────────────────────────
+        ds_rows = _build_directskip_rows()
+        _clear_and_write(svc, TAB_DIRECTSKIP, ds_rows)
+        logger.info(f"  [SYNC] DirectSkip: {len(ds_rows) - 1} row(s) written.")
 
     except Exception as e:
         logger.error(f"  [SYNC] Sheets sync failed: {e}")

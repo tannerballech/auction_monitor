@@ -94,6 +94,9 @@ CREATE TABLE IF NOT EXISTS listings (
     deceased            TEXT,
     skiptrace_date      TEXT,           -- YYYY-MM-DD
 
+    -- directskip (phase 3b — future)
+    directskip_date     TEXT,           -- YYYY-MM-DD, populated when results ingested
+
     -- heir research (phase 4)
     obit_found          TEXT,
     obit_summary        TEXT,
@@ -168,6 +171,7 @@ def _migrate_owner_name_cols() -> None:
         "owner_last",
         "owner_secondary_first",
         "owner_secondary_last",
+        "directskip_date",
     ]
     with _conn() as con:
         existing = {row[1] for row in con.execute("PRAGMA table_info(listings)").fetchall()}

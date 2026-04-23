@@ -293,6 +293,7 @@ def _build_directskip_rows() -> list[list]:
                     OR equity_signal IS NULL
                     OR equity_signal = ''
               )
+              AND (directskip_date IS NULL OR directskip_date = '')
             ORDER BY
               CASE equity_signal
                 WHEN '🏆' THEN 1

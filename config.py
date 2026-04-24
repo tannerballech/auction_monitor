@@ -32,6 +32,9 @@ TRACERFY_INSTANT_TRACE_URL = os.environ.get(
     "TRACERFY_INSTANT_TRACE_URL",
     "https://app.fastappend.com/v1/api/instant-trace/"
 )
+
+# ── PhoneBurner API ───────────────────────────────────────────────────────────
+PHONEBURNER_ACCESS_TOKEN = os.environ.get("PHONEBURNER_ACCESS_TOKEN", "")
 # ── Email Sources ─────────────────────────────────────────────────────────────
 EMAIL_SOURCES = [
     {

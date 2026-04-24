@@ -82,6 +82,7 @@ from heir_skiptrace import skip_trace_heir
 from sheets_sync import sync_to_sheets
 from ingest_directskip import ingest as ingest_directskip
 from phoneburner_export import generate as generate_phoneburner
+from phoneburner_push import push as push_phoneburner
 from propai_export import generate as generate_propai
 from scrapers.tn_trustees import rubin_lublin as _rl_scraper
 from scrapers.tn_trustees.registry import lookup_trustee, TRUSTEE_REGISTRY
@@ -1269,10 +1270,22 @@ if __name__ == "__main__":
         action="store_true",
         help="Export a Prop.ai upload CSV (sales 5–30 days out, 🏆/✅, DirectSkip data required).",
     )
+    parser.add_argument(
+        "--phoneburner-push",
+        action="store_true",
+        dest="phoneburner_push",
+        help="Push contacts directly to PhoneBurner via API (sales 5–30 days out, 🏆/✅, DirectSkip data required).",
+    )
 
     args = parser.parse_args()
 
-    if args.phoneburner:
+    if args.phoneburner_push:
+        print("=" * 60)
+        print(f"  Eagle Creek Auction Monitor — PhoneBurner Push")
+        print(f"  {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+        print("=" * 60)
+        push_phoneburner(dry_run=args.dry_run)
+    elif args.phoneburner:
         print("=" * 60)
         print(f"  Eagle Creek Auction Monitor — PhoneBurner Export")
         print(f"  {datetime.now().strftime('%Y-%m-%d %H:%M')}")

@@ -111,30 +111,34 @@ async def _run(csv_path: Path, headless: bool) -> Path | None:
 
         await page.click("input[name=submit_step2]")
 
-        # ── Steps 3 & 4: Auto-submit remaining wizard steps ───────────────────
-        for step_num in (3, 4):
-            try:
-                await page.wait_for_selector("input[type=submit]", timeout=10_000)
-            except PWTimeout:
-                break  # already past the wizard
+        # ── Step 3: Data preview — just a "Save" button, no decisions needed ──
+        await page.wait_for_selector("input[type=submit]", timeout=15_000)
+        print("  [DS] Step 3: data preview — confirming...")
+        await page.click("input[type=submit]")
 
-            current_url = page.url
-            if "files.php" in current_url:
-                break  # wizard finished early
+        # ── Step 4: Order summary / payment ───────────────────────────────────
+        await page.wait_for_selector("body", timeout=10_000)
+        print("  [DS] Step 4: checking payment method...")
 
-            step_text = ""
-            try:
-                step_el = await page.query_selector("[aria-label*='Step'], .progress-bar, h2, h1")
-                if step_el:
-                    step_text = await step_el.inner_text()
-            except Exception:
-                pass
+        # Detect whether Stripe is present (= no token balance) or a plain
+        # submit button is shown (= tokens will cover the order).
+        stripe_present = await page.locator("iframe[src*='stripe.com']").count() > 0
+        token_balance_text = await page.locator("body").inner_text()
+        import re as _re
+        token_match = _re.search(r'balance of (\d+)', token_balance_text)
+        token_balance = int(token_match.group(1)) if token_match else 0
 
-            print(f"  [DS] Step {step_num}: {step_text.strip() or 'submitting...'}")
+        if stripe_present and token_balance == 0:
+            raise RuntimeError(
+                "DirectSkip Step 4 requires a credit card — your token balance is 0. "
+                "Purchase tokens at https://buy.directskip.com/ so orders can be "
+                "submitted automatically without card entry."
+            )
 
-            # Click the first visible submit button
-            submit = page.locator("input[type=submit], button[type=submit]").first
-            await submit.click()
+        # Tokens available — look for a plain submit/pay button (not inside Stripe iframe)
+        submit = page.locator("input[type=submit]:not(iframe *), button[type=submit]:not(iframe *)").first
+        print(f"  [DS] Step 4: submitting with {token_balance} token(s)...")
+        await submit.click()
 
         # ── Wait to land on files.php ─────────────────────────────────────────
         try:

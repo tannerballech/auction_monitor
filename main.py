@@ -81,6 +81,8 @@ from heir_skiptrace import skip_trace_heir
 
 from sheets_sync import sync_to_sheets
 from ingest_directskip import ingest as ingest_directskip
+from directskip_export import generate as generate_directskip_csv
+from directskip_upload import run as run_directskip_upload
 from phoneburner_export import generate as generate_phoneburner
 from phoneburner_push import push as push_phoneburner
 from propai_export import generate as generate_propai
@@ -1276,10 +1278,43 @@ if __name__ == "__main__":
         dest="phoneburner_push",
         help="Push contacts directly to PhoneBurner via API (sales 5–30 days out, 🏆/✅, DirectSkip data required).",
     )
+    parser.add_argument(
+        "--directskip-export",
+        action="store_true",
+        dest="directskip_export",
+        help="Generate a DirectSkip upload CSV from unprocessed listings (no upload).",
+    )
+    parser.add_argument(
+        "--directskip-upload",
+        action="store_true",
+        dest="directskip_upload",
+        help="Full DirectSkip cycle: export CSV → upload → poll → download → ingest.",
+    )
+    parser.add_argument(
+        "--headless",
+        action="store_true",
+        help="Run browser automation in headless mode (default: headed/visible).",
+    )
 
     args = parser.parse_args()
 
-    if args.phoneburner_push:
+    if args.directskip_upload:
+        print("=" * 60)
+        print(f"  Eagle Creek Auction Monitor — DirectSkip Upload")
+        print(f"  {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+        print("=" * 60)
+        run_directskip_upload(headless=args.headless, dry_run=args.dry_run)
+        if not args.dry_run:
+            print(f"\n[SYNC] Syncing DB → Sheets...")
+            sync_to_sheets()
+            print(f"  Sync complete.")
+    elif args.directskip_export:
+        print("=" * 60)
+        print(f"  Eagle Creek Auction Monitor — DirectSkip Export")
+        print(f"  {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+        print("=" * 60)
+        generate_directskip_csv(dry_run=args.dry_run)
+    elif args.phoneburner_push:
         print("=" * 60)
         print(f"  Eagle Creek Auction Monitor — PhoneBurner Push")
         print(f"  {datetime.now().strftime('%Y-%m-%d %H:%M')}")

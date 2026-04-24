@@ -35,6 +35,10 @@ TRACERFY_INSTANT_TRACE_URL = os.environ.get(
 
 # ── PhoneBurner API ───────────────────────────────────────────────────────────
 PHONEBURNER_ACCESS_TOKEN = os.environ.get("PHONEBURNER_ACCESS_TOKEN", "")
+
+# ── DirectSkip portal credentials ─────────────────────────────────────────────
+DIRECTSKIP_EMAIL    = os.environ.get("DIRECTSKIP_EMAIL", "")
+DIRECTSKIP_PASSWORD = os.environ.get("DIRECTSKIP_PASSWORD", "")
 # ── Email Sources ─────────────────────────────────────────────────────────────
 EMAIL_SOURCES = [
     {

@@ -86,6 +86,7 @@ from directskip_upload import run as run_directskip_upload
 from phoneburner_export import generate as generate_phoneburner
 from phoneburner_push import push as push_phoneburner
 from propai_export import generate as generate_propai
+from propai_push import push as push_propai
 from scrapers.tn_trustees import rubin_lublin as _rl_scraper
 from scrapers.tn_trustees.registry import lookup_trustee, TRUSTEE_REGISTRY
 from storage import (
@@ -1279,6 +1280,12 @@ if __name__ == "__main__":
         help="Push contacts directly to PhoneBurner via API (sales 5–30 days out, 🏆/✅, DirectSkip data required).",
     )
     parser.add_argument(
+        "--propai-push",
+        action="store_true",
+        dest="propai_push",
+        help="Create a Prop.ai campaign and upload qualifying leads via API (sales 5–30 days out, 🏆/✅, DirectSkip data required).",
+    )
+    parser.add_argument(
         "--directskip-export",
         action="store_true",
         dest="directskip_export",
@@ -1326,6 +1333,12 @@ if __name__ == "__main__":
         print(f"  {datetime.now().strftime('%Y-%m-%d %H:%M')}")
         print("=" * 60)
         generate_phoneburner(dry_run=args.dry_run)
+    elif args.propai_push:
+        print("=" * 60)
+        print(f"  Eagle Creek Auction Monitor — Prop.ai Push")
+        print(f"  {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+        print("=" * 60)
+        push_propai(dry_run=args.dry_run)
     elif args.propai:
         print("=" * 60)
         print(f"  Eagle Creek Auction Monitor — Prop.ai Export")

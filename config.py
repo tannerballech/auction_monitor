@@ -39,6 +39,10 @@ PHONEBURNER_ACCESS_TOKEN = os.environ.get("PHONEBURNER_ACCESS_TOKEN", "")
 # ── DirectSkip portal credentials ─────────────────────────────────────────────
 DIRECTSKIP_EMAIL    = os.environ.get("DIRECTSKIP_EMAIL", "")
 DIRECTSKIP_PASSWORD = os.environ.get("DIRECTSKIP_PASSWORD", "")
+
+# ── Prop.ai portal credentials ────────────────────────────────────────────────
+PROPAI_EMAIL    = os.environ.get("PROPAI_EMAIL", "")
+PROPAI_PASSWORD = os.environ.get("PROPAI_PASSWORD", "")
 # ── Email Sources ─────────────────────────────────────────────────────────────
 EMAIL_SOURCES = [
     {

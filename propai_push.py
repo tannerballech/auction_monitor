@@ -42,10 +42,13 @@ API_BASE = "https://ff34s0wbc8.execute-api.us-east-1.amazonaws.com/production"
 
 # "Preforeclosure by Johnny Mc" agent — confirmed via live API capture
 AGENT_ID   = "6eb69f45-5a46-49e8-a256-430e5e105b48"
-AGENT_NAME = "Vicky Vale"   # default AI caller name for this agent
+# The wizard defaults agent_name to "Gen" for all new campaigns regardless of
+# which script is selected — the preforeclosure script selection only updates
+# agent_id and first_sentence, never agent_name. Change this to whatever
+# caller name you want the AI to say on the call (fills {{agent_name}}).
+AGENT_NAME = "Gen"
 
-# Default campaign settings — update AGENT_NAME above to change what the AI
-# says its name is on the call (it fills {{agent_name}} in first_sentence).
+# Default campaign settings — confirmed from live wizard POST capture.
 _CAMPAIGN_DEFAULTS = {
     "agent_id":               AGENT_ID,
     "agent_name":             AGENT_NAME,

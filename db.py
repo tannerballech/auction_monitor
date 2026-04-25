@@ -97,6 +97,9 @@ CREATE TABLE IF NOT EXISTS listings (
     -- directskip (phase 3b — future)
     directskip_date     TEXT,           -- YYYY-MM-DD, populated when results ingested
 
+    -- outreach tracking
+    propai_pushed_at    TEXT,           -- YYYY-MM-DD, set when pushed to Prop.ai campaign
+
     -- heir research (phase 4)
     obit_found          TEXT,
     obit_summary        TEXT,
@@ -210,6 +213,7 @@ def init_db() -> None:
     with _conn() as con:
         con.executescript(_DDL)
     _migrate_owner_name_cols()
+    _migrate_propai_col()
 
 
 def _migrate_owner_name_cols() -> None:
@@ -245,6 +249,14 @@ def _migrate_owner_name_cols() -> None:
                 "owner_secondary_first=?, owner_secondary_last=? WHERE id=?",
                 (first, last, sec_first, sec_last, row["id"]),
             )
+
+
+def _migrate_propai_col() -> None:
+    """Add propai_pushed_at column to listings if it doesn't exist yet."""
+    with _conn() as con:
+        existing = {row[1] for row in con.execute("PRAGMA table_info(listings)").fetchall()}
+        if "propai_pushed_at" not in existing:
+            con.execute("ALTER TABLE listings ADD COLUMN propai_pushed_at TEXT DEFAULT ''")
 
 
 # ---------------------------------------------------------------------------

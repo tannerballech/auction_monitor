@@ -40,22 +40,20 @@ _SIGN_IN_URL = (
 )
 API_BASE = "https://ff34s0wbc8.execute-api.us-east-1.amazonaws.com/production"
 
-AGENT_ID   = "2d25eeff-48d3-4997-9739-331ccbb9f268"
-AGENT_NAME = "Gen"
+# "Preforeclosure by Johnny Mc" agent — confirmed via live API capture
+AGENT_ID   = "6eb69f45-5a46-49e8-a256-430e5e105b48"
+AGENT_NAME = "Vicky Vale"   # default AI caller name for this agent
 
-# Default campaign settings from live XHR capture
+# Default campaign settings — update AGENT_NAME above to change what the AI
+# says its name is on the call (it fills {{agent_name}} in first_sentence).
 _CAMPAIGN_DEFAULTS = {
     "agent_id":               AGENT_ID,
     "agent_name":             AGENT_NAME,
-    "follow_up_caller_name":  "Cameron",
-    "company_name":           "ABC capital",
-    "first_sentence": (
-        "Hi, I'm reaching out because I noticed your property may be going through "
-        "a foreclosure sale. I'm with ABC Capital and I'd love to see if there's a "
-        "way we can help. Is that something you'd be open to discussing?"
-    ),
-    "prompt_injection": None,
-    "ghl_pipeline_id":  None,
+    "follow_up_caller_name":  "Jimmy",
+    "company_name":           "Eagle Creek Holdings",
+    "first_sentence":         "Hello this is {{agent_name}}. this is the owner of {{address}}? Correct?",
+    "prompt_injection":       None,
+    "ghl_pipeline_id":        None,
 }
 
 
@@ -222,6 +220,7 @@ def _query_leads(date_min: str, date_max: str) -> list[dict]:
     with _conn() as con:
         rows = con.execute("""
             SELECT
+                l.id AS listing_id,
                 p.first_name, p.last_name,
                 p.phone1, p.phone2, p.phone3,
                 p.phone4, p.phone5, p.phone6, p.phone7,
@@ -232,10 +231,22 @@ def _query_leads(date_min: str, date_max: str) -> list[dict]:
             WHERE l.equity_signal IN ('🏆', '✅')
               AND (l.directskip_date IS NOT NULL AND l.directskip_date != '')
               AND (l.cancelled IS NULL OR LOWER(l.cancelled) != 'yes')
+              AND (l.propai_pushed_at IS NULL OR l.propai_pushed_at = '')
               AND l.sale_date BETWEEN ? AND ?
             ORDER BY l.sale_date ASC, p.listing_id, p.person_number
         """, (date_min, date_max)).fetchall()
     return [dict(r) for r in rows]
+
+
+def _mark_pushed(listing_ids: list[int], pushed_date: str) -> None:
+    """Stamp propai_pushed_at on every listing that was just uploaded."""
+    if not listing_ids:
+        return
+    with _conn() as con:
+        con.executemany(
+            "UPDATE listings SET propai_pushed_at = ? WHERE id = ?",
+            [(pushed_date, lid) for lid in listing_ids],
+        )
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
@@ -302,7 +313,10 @@ def push(dry_run: bool = False) -> None:
     print("  [Prop.ai] Starting campaign...")
     _run_campaign(token, uid, campaign_id)
 
+    listing_ids = list({r["listing_id"] for r in rows})
+    _mark_pushed(listing_ids, today.isoformat())
+
     print(
         f"  [Prop.ai] ✓ Done — campaign '{campaign_name}' "
-        f"running with {n_leads} leads."
+        f"running with {n_leads} leads ({len(listing_ids)} listing(s) marked pushed)."
     )

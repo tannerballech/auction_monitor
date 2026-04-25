@@ -89,21 +89,18 @@ def _build_phone_index() -> dict[str, int]:
 # ── Leads fetching ────────────────────────────────────────────────────────────
 
 def _fetch_all_leads(token: str, uid: str, campaign_id: str) -> list[dict]:
-    """Page through GET /leads for one campaign and return every lead."""
-    leads: list[dict] = []
-    cursor: str | None = None
-    while True:
-        params: dict = {"campaign_id": campaign_id, "user_id": uid, "limit": 100}
-        if cursor:
-            params["next_page"] = cursor
-        data = _api_get("/leads", token, uid, params=params)
-        batch = data.get("leads") or []
-        leads.extend(batch)
-        next_cur = (data.get("pagination") or {}).get("next_page")
-        if not next_cur or not batch:
-            break
-        cursor = next_cur
-    return leads
+    """Fetch all leads for one campaign in a single request.
+
+    The API's cursor pagination is non-functional — next_page is always
+    ignored and the first page is returned regardless. Using a large limit
+    gets all leads in one shot.
+    """
+    data = _api_get("/leads", token, uid, params={
+        "campaign_id": campaign_id,
+        "user_id": uid,
+        "limit": 10_000,
+    })
+    return data.get("leads") or []
 
 
 # ── DB upsert ─────────────────────────────────────────────────────────────────
@@ -178,6 +175,42 @@ def _get_tracked_campaigns() -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def _get_all_account_campaigns(token: str, uid: str) -> list[dict]:
+    """Return every campaign in the account via POST /campaigns/search."""
+    campaigns: list[dict] = []
+    page = 1
+    while True:
+        resp = requests.post(
+            f"{API_BASE}/campaigns/search",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "x-userid": uid,
+                "Content-Type": "application/json",
+            },
+            json={"user_id": uid, "limit": 50, "page": page},
+            timeout=30,
+        )
+        if not resp.ok:
+            raise RuntimeError(
+                f"campaigns/search {resp.status_code}: {resp.text[:400]}"
+            )
+        data = resp.json()
+        batch = data.get("campaigns") or []
+        campaigns.extend(batch)
+        total_pages = data.get("total_pages") or 1
+        if page >= total_pages or not batch:
+            break
+        page += 1
+    return [
+        {
+            "campaign_id":   c.get("campaign_id") or c.get("id", ""),
+            "campaign_name": c.get("campaign_name") or c.get("name", ""),
+            "pushed_at":     c.get("created_at", "")[:10] if c.get("created_at") else "",
+        }
+        for c in campaigns
+    ]
+
+
 # ── Summary helpers ───────────────────────────────────────────────────────────
 
 def _print_campaign_summary(
@@ -203,28 +236,41 @@ def _print_campaign_summary(
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 
-def sync(dry_run: bool = False) -> None:
-    """Pull call dispositions from Prop.ai and upsert into propai_results."""
-    campaigns = _get_tracked_campaigns()
-    if not campaigns:
-        print("  [Prop.ai Sync] No campaigns tracked in the last 30 days.")
-        print("  [Prop.ai Sync] Run --propai-push first to create and record a campaign.")
-        return
+def sync(dry_run: bool = False, all_campaigns: bool = False) -> None:
+    """Pull call dispositions from Prop.ai and upsert into propai_results.
 
-    print(f"  [Prop.ai Sync] {len(campaigns)} campaign(s) to sync.")
+    all_campaigns=True fetches every campaign in the account rather than
+    only campaigns pushed via --propai-push in the last 30 days.
+    """
+    email    = os.environ.get("PROPAI_EMAIL", "")
+    password = os.environ.get("PROPAI_PASSWORD", "")
+    if not email or not password:
+        raise RuntimeError("PROPAI_EMAIL and PROPAI_PASSWORD must be set in .env")
+
+    if all_campaigns:
+        print("  [Prop.ai Sync] Authenticating to list all account campaigns...")
+        token, uid = _firebase_auth(email, password)
+        campaigns = _get_all_account_campaigns(token, uid)
+        if not campaigns:
+            print("  [Prop.ai Sync] No campaigns found in account.")
+            return
+        print(f"  [Prop.ai Sync] {len(campaigns)} campaign(s) in account.")
+    else:
+        campaigns = _get_tracked_campaigns()
+        if not campaigns:
+            print("  [Prop.ai Sync] No campaigns tracked in the last 30 days.")
+            print("  [Prop.ai Sync] Run --propai-push first, or use --propai-sync-all.")
+            return
+        print(f"  [Prop.ai Sync] {len(campaigns)} campaign(s) to sync.")
 
     if dry_run:
         for c in campaigns:
             print(f"    {c['pushed_at']}  {c['campaign_name']}  ({c['campaign_id'][:8]}...)")
         return
 
-    email    = os.environ.get("PROPAI_EMAIL", "")
-    password = os.environ.get("PROPAI_PASSWORD", "")
-    if not email or not password:
-        raise RuntimeError("PROPAI_EMAIL and PROPAI_PASSWORD must be set in .env")
-
-    print("  [Prop.ai Sync] Authenticating...")
-    token, uid = _firebase_auth(email, password)
+    if not all_campaigns:
+        print("  [Prop.ai Sync] Authenticating...")
+        token, uid = _firebase_auth(email, password)
 
     print("  [Prop.ai Sync] Building phone index...")
     phone_index = _build_phone_index()

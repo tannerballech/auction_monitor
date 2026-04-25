@@ -1290,7 +1290,13 @@ if __name__ == "__main__":
         "--propai-sync",
         action="store_true",
         dest="propai_sync",
-        help="Pull call dispositions from Prop.ai and upsert into propai_results (polls all campaigns pushed in the last 30 days).",
+        help="Pull call dispositions from Prop.ai and upsert into propai_results (polls campaigns pushed in the last 30 days).",
+    )
+    parser.add_argument(
+        "--propai-sync-all",
+        action="store_true",
+        dest="propai_sync_all",
+        help="Like --propai-sync but polls every campaign in the account, not just ones tracked locally.",
     )
     parser.add_argument(
         "--directskip-export",
@@ -1352,6 +1358,12 @@ if __name__ == "__main__":
         print(f"  {datetime.now().strftime('%Y-%m-%d %H:%M')}")
         print("=" * 60)
         sync_propai(dry_run=args.dry_run)
+    elif args.propai_sync_all:
+        print("=" * 60)
+        print(f"  Eagle Creek Auction Monitor — Prop.ai Sync (All Campaigns)")
+        print(f"  {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+        print("=" * 60)
+        sync_propai(dry_run=args.dry_run, all_campaigns=True)
     elif args.propai:
         print("=" * 60)
         print(f"  Eagle Creek Auction Monitor — Prop.ai Export")

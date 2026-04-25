@@ -88,6 +88,9 @@ def _build_phone_index() -> dict[str, int]:
 
 # ── Leads fetching ────────────────────────────────────────────────────────────
 
+_LEADS_LIMIT = 10_000
+
+
 def _fetch_all_leads(token: str, uid: str, campaign_id: str) -> list[dict]:
     """Fetch all leads for one campaign in a single request.
 
@@ -98,9 +101,15 @@ def _fetch_all_leads(token: str, uid: str, campaign_id: str) -> list[dict]:
     data = _api_get("/leads", token, uid, params={
         "campaign_id": campaign_id,
         "user_id": uid,
-        "limit": 10_000,
+        "limit": _LEADS_LIMIT,
     })
-    return data.get("leads") or []
+    leads = data.get("leads") or []
+    if len(leads) >= _LEADS_LIMIT:
+        print(
+            f"  ⚠️  WARNING: Lead fetch hit the {_LEADS_LIMIT:,} limit — "
+            "some leads may have been truncated. Pagination support may need to be added."
+        )
+    return leads
 
 
 # ── DB upsert ─────────────────────────────────────────────────────────────────

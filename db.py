@@ -206,6 +206,33 @@ CREATE TABLE IF NOT EXISTS needs_review (
     reason      TEXT,           -- why it was routed here
     reviewed    INTEGER DEFAULT 0
 );
+
+CREATE TABLE IF NOT EXISTS propai_pushes (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    listing_id    INTEGER REFERENCES listings(id),
+    campaign_id   TEXT NOT NULL,
+    campaign_name TEXT,
+    pushed_at     TEXT NOT NULL,    -- YYYY-MM-DD
+    UNIQUE (listing_id, campaign_id)
+);
+
+CREATE TABLE IF NOT EXISTS propai_results (
+    lead_id            TEXT PRIMARY KEY,
+    campaign_id        TEXT NOT NULL,
+    listing_id         INTEGER REFERENCES listings(id),
+    phone_number       TEXT,
+    prospect_name      TEXT,
+    lead_status        TEXT,   -- New / Called - No Answer / Called - Human Answered / Callback Requested
+    call_status        TEXT,   -- completed / failed
+    answered_by        TEXT,   -- human / voicemail / unknown
+    callback_requested INTEGER DEFAULT 0,
+    total_calls        INTEGER DEFAULT 0,
+    last_call_dt       TEXT,
+    call_summary       TEXT,
+    analysis           TEXT,
+    transcript         TEXT,
+    synced_at          TEXT NOT NULL
+);
 """
 
 
@@ -257,6 +284,7 @@ def _migrate_propai_col() -> None:
         existing = {row[1] for row in con.execute("PRAGMA table_info(listings)").fetchall()}
         if "propai_pushed_at" not in existing:
             con.execute("ALTER TABLE listings ADD COLUMN propai_pushed_at TEXT DEFAULT ''")
+        # propai_pushes and propai_results are created by _DDL via executescript (IF NOT EXISTS)
 
 
 # ---------------------------------------------------------------------------

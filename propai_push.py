@@ -241,14 +241,25 @@ def _query_leads(date_min: str, date_max: str) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-def _mark_pushed(listing_ids: list[int], pushed_date: str) -> None:
-    """Stamp propai_pushed_at on every listing that was just uploaded."""
+def _mark_pushed(
+    listing_ids: list[int],
+    pushed_date: str,
+    campaign_id: str,
+    campaign_name: str,
+) -> None:
+    """Stamp propai_pushed_at on listings and record the campaign in propai_pushes."""
     if not listing_ids:
         return
     with _conn() as con:
         con.executemany(
             "UPDATE listings SET propai_pushed_at = ? WHERE id = ?",
             [(pushed_date, lid) for lid in listing_ids],
+        )
+        con.executemany(
+            """INSERT OR IGNORE INTO propai_pushes
+               (listing_id, campaign_id, campaign_name, pushed_at)
+               VALUES (?, ?, ?, ?)""",
+            [(lid, campaign_id, campaign_name, pushed_date) for lid in listing_ids],
         )
 
 
@@ -317,7 +328,7 @@ def push(dry_run: bool = False) -> None:
     _run_campaign(token, uid, campaign_id)
 
     listing_ids = list({r["listing_id"] for r in rows})
-    _mark_pushed(listing_ids, today.isoformat())
+    _mark_pushed(listing_ids, today.isoformat(), campaign_id, campaign_name)
 
     print(
         f"  [Prop.ai] ✓ Done — campaign '{campaign_name}' "

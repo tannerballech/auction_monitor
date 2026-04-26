@@ -207,6 +207,7 @@ def push(dry_run: bool = False) -> None:
     with _conn() as con:
         rows = con.execute("""
             SELECT
+                l.id AS listing_id,
                 p.first_name,
                 p.last_name,
                 p.phone1, p.phone2, p.phone3, p.phone4, p.phone5,
@@ -256,8 +257,16 @@ def push(dry_run: bool = False) -> None:
 
     for i, row in enumerate(rows, 1):
         try:
-            _push_contact(dict(row), member_id, folder_id)
+            contact_user_id = _push_contact(dict(row), member_id, folder_id)
             pushed += 1
+            phones = [p for p in [row["phone1"], row["phone2"], row["phone3"], row["phone4"], row["phone5"]] if p]
+            primary_phone = phones[0] if phones else ""
+            with _conn() as con:
+                con.execute(
+                    "INSERT OR IGNORE INTO phoneburner_contacts "
+                    "(contact_user_id, listing_id, phone, pushed_at) VALUES (?,?,?,?)",
+                    (contact_user_id, row["listing_id"], primary_phone, today.isoformat()),
+                )
             # Polite rate-limiting — PhoneBurner doesn't publish limits
             # but ~5 req/sec is conservative and safe
             time.sleep(0.2)

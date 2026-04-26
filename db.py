@@ -233,6 +233,29 @@ CREATE TABLE IF NOT EXISTS propai_results (
     transcript         TEXT,
     synced_at          TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS phoneburner_contacts (
+    contact_user_id TEXT PRIMARY KEY,
+    listing_id      INTEGER REFERENCES listings(id),
+    phone           TEXT,       -- primary phone used at push time
+    pushed_at       TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS phoneburner_results (
+    call_id         TEXT PRIMARY KEY,
+    dialsession_id  TEXT NOT NULL,
+    listing_id      INTEGER REFERENCES listings(id),
+    contact_user_id TEXT,
+    phone           TEXT,
+    disposition     TEXT,
+    connected       INTEGER DEFAULT 0,
+    voicemail       INTEGER DEFAULT 0,
+    voicemail_sent  TEXT,
+    note            TEXT,
+    start_when      TEXT,
+    end_when        TEXT,
+    synced_at       TEXT NOT NULL
+);
 """
 
 
@@ -241,6 +264,7 @@ def init_db() -> None:
         con.executescript(_DDL)
     _migrate_owner_name_cols()
     _migrate_propai_col()
+    _migrate_phoneburner_cols()
 
 
 def _migrate_owner_name_cols() -> None:
@@ -285,6 +309,25 @@ def _migrate_propai_col() -> None:
         if "propai_pushed_at" not in existing:
             con.execute("ALTER TABLE listings ADD COLUMN propai_pushed_at TEXT DEFAULT ''")
         # propai_pushes and propai_results are created by _DDL via executescript (IF NOT EXISTS)
+
+
+def _migrate_phoneburner_cols() -> None:
+    """Add PhoneBurner-related columns to existing tables."""
+    with _conn() as con:
+        listings_cols = {row[1] for row in con.execute("PRAGMA table_info(listings)").fetchall()}
+        if "follow_up_status" not in listings_cols:
+            con.execute(
+                "ALTER TABLE listings ADD COLUMN follow_up_status TEXT DEFAULT 'active'"
+            )
+
+        persons_cols = {
+            row[1] for row in con.execute("PRAGMA table_info(directskip_persons)").fetchall()
+        }
+        if "phone_status" not in persons_cols:
+            con.execute(
+                "ALTER TABLE directskip_persons ADD COLUMN phone_status TEXT DEFAULT 'unknown'"
+            )
+        # phoneburner_contacts and phoneburner_results are created by _DDL (IF NOT EXISTS)
 
 
 # ---------------------------------------------------------------------------

@@ -88,6 +88,7 @@ from phoneburner_push import push as push_phoneburner
 from propai_export import generate as generate_propai
 from propai_push import push as push_propai
 from propai_sync import sync as sync_propai
+from phoneburner_sync import sync as sync_phoneburner
 from scrapers.tn_trustees import rubin_lublin as _rl_scraper
 from scrapers.tn_trustees.registry import lookup_trustee, TRUSTEE_REGISTRY
 from storage import (
@@ -1311,6 +1312,18 @@ if __name__ == "__main__":
         help="Full DirectSkip cycle: export CSV → upload → poll → download → ingest.",
     )
     parser.add_argument(
+        "--phoneburner-sync",
+        action="store_true",
+        dest="phoneburner_sync",
+        help="Pull call dispositions from PhoneBurner and upsert into phoneburner_results (date-windowed).",
+    )
+    parser.add_argument(
+        "--phoneburner-sync-all",
+        action="store_true",
+        dest="phoneburner_sync_all",
+        help="Like --phoneburner-sync but fetches all history from 2020-01-01.",
+    )
+    parser.add_argument(
         "--headless",
         action="store_true",
         help="Run browser automation in headless mode (default: headed/visible).",
@@ -1318,7 +1331,19 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    if args.directskip_upload:
+    if args.phoneburner_sync_all:
+        print("=" * 60)
+        print(f"  Eagle Creek Auction Monitor — PhoneBurner Sync (All History)")
+        print(f"  {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+        print("=" * 60)
+        sync_phoneburner(dry_run=args.dry_run, all_sessions=True)
+    elif args.phoneburner_sync:
+        print("=" * 60)
+        print(f"  Eagle Creek Auction Monitor — PhoneBurner Sync")
+        print(f"  {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+        print("=" * 60)
+        sync_phoneburner(dry_run=args.dry_run)
+    elif args.directskip_upload:
         print("=" * 60)
         print(f"  Eagle Creek Auction Monitor — DirectSkip Upload")
         print(f"  {datetime.now().strftime('%Y-%m-%d %H:%M')}")

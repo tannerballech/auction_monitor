@@ -160,10 +160,42 @@ def _ensure_tab(svc, title: str, existing_titles: set[str]) -> None:
     ).execute()
 
 
-def _clear_and_write(svc, tab: str, values: list[list[Any]]) -> None:
-    """Clear a tab then write values starting at A1. Chunks by 500 rows."""
+def _ensure_grid_rows(svc, sheet_id: int, needed_rows: int) -> None:
+    """Expand a sheet's rowCount to at least needed_rows."""
+    svc.spreadsheets().batchUpdate(
+        spreadsheetId=SPREADSHEET_ID,
+        body={
+            "requests": [{
+                "updateSheetProperties": {
+                    "properties": {
+                        "sheetId": sheet_id,
+                        "gridProperties": {"rowCount": needed_rows},
+                    },
+                    "fields": "gridProperties.rowCount",
+                }
+            }]
+        },
+    ).execute()
+
+
+def _clear_and_write(
+    svc,
+    tab: str,
+    values: list[list[Any]],
+    sheet_id: int | None = None,
+) -> None:
+    """Clear a tab then write values starting at A1. Chunks by 500 rows.
+
+    If sheet_id is provided the sheet's rowCount is expanded as needed so
+    writes never crash against Google Sheets' default 1 000-row grid limit.
+    """
     if not values:
         return
+
+    # Expand the grid if we have more rows than the current limit
+    if sheet_id is not None:
+        needed = max(1000, len(values) + 50)
+        _ensure_grid_rows(svc, sheet_id, needed)
 
     n_cols    = len(values[0])
     last_col  = _col_letter(n_cols)
@@ -376,6 +408,7 @@ def _build_ds_persons_rows() -> list[list]:
                 p.mailing_street, p.mailing_city, p.mailing_state, p.mailing_zip
             FROM directskip_persons p
             JOIN listings l ON l.id = p.listing_id
+            WHERE l.equity_signal IN ('🏆', '✅')
             ORDER BY p.listing_id, p.person_number
         """).fetchall()
 
@@ -419,6 +452,7 @@ def _build_ds_relatives_rows() -> list[list]:
             FROM directskip_relatives r
             JOIN listings l ON l.id = r.listing_id
             WHERE r.name IS NOT NULL AND r.name != ''
+              AND l.equity_signal IN ('🏆', '✅')
             ORDER BY r.listing_id, r.person_number, r.relative_number
         """).fetchall()
 
@@ -462,37 +496,44 @@ def sync_to_sheets() -> None:
                       TAB_DIRECTSKIP, TAB_DS_PERSONS, TAB_DS_RELATIVES):
             _ensure_tab(svc, title, existing_titles)
 
+        # Re-fetch metadata after any new tabs were created so sheet IDs are current
+        meta    = svc.spreadsheets().get(spreadsheetId=SPREADSHEET_ID).execute()
+        tab_ids = {
+            s["properties"]["title"]: s["properties"]["sheetId"]
+            for s in meta.get("sheets", [])
+        }
+
         # ── Auctions ──────────────────────────────────────────────────────────
         listings = _read_all_listings()
         values   = _rows_to_values(listings, AUCTIONS_COLS)
-        _clear_and_write(svc, TAB_AUCTIONS, values)
+        _clear_and_write(svc, TAB_AUCTIONS, values, tab_ids.get(TAB_AUCTIONS))
         logger.info(f"  [SYNC] Auctions: {len(listings)} row(s) written.")
 
         # ── Heir Leads ────────────────────────────────────────────────────────
         leads  = _read_all_heir_leads()
         values = _rows_to_values(leads, HEIR_LEADS_COLS)
-        _clear_and_write(svc, TAB_HEIR_LEADS, values)
+        _clear_and_write(svc, TAB_HEIR_LEADS, values, tab_ids.get(TAB_HEIR_LEADS))
         logger.info(f"  [SYNC] Heir Leads: {len(leads)} row(s) written.")
 
         # ── Needs Review ──────────────────────────────────────────────────────
         review = _read_all_needs_review()
         values = _rows_to_values(review, NEEDS_REVIEW_COLS)
-        _clear_and_write(svc, TAB_NEEDS_REVIEW, values)
+        _clear_and_write(svc, TAB_NEEDS_REVIEW, values, tab_ids.get(TAB_NEEDS_REVIEW))
         logger.info(f"  [SYNC] Needs Review: {len(review)} row(s) written.")
 
         # ── DirectSkip (upload queue) ─────────────────────────────────────────
         ds_rows = _build_directskip_rows()
-        _clear_and_write(svc, TAB_DIRECTSKIP, ds_rows)
+        _clear_and_write(svc, TAB_DIRECTSKIP, ds_rows, tab_ids.get(TAB_DIRECTSKIP))
         logger.info(f"  [SYNC] DirectSkip: {len(ds_rows) - 1} row(s) written.")
 
         # ── DS Persons ────────────────────────────────────────────────────────
         dsp_rows = _build_ds_persons_rows()
-        _clear_and_write(svc, TAB_DS_PERSONS, dsp_rows)
+        _clear_and_write(svc, TAB_DS_PERSONS, dsp_rows, tab_ids.get(TAB_DS_PERSONS))
         logger.info(f"  [SYNC] DS Persons: {len(dsp_rows) - 1} row(s) written.")
 
         # ── DS Relatives ──────────────────────────────────────────────────────
         dsr_rows = _build_ds_relatives_rows()
-        _clear_and_write(svc, TAB_DS_RELATIVES, dsr_rows)
+        _clear_and_write(svc, TAB_DS_RELATIVES, dsr_rows, tab_ids.get(TAB_DS_RELATIVES))
         logger.info(f"  [SYNC] DS Relatives: {len(dsr_rows) - 1} row(s) written.")
 
     except Exception as e:

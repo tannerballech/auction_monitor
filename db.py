@@ -260,8 +260,9 @@ CREATE TABLE IF NOT EXISTS phoneburner_results (
 CREATE TABLE IF NOT EXISTS city_aliases (
     city            TEXT NOT NULL,      -- lowercase
     state           TEXT NOT NULL,      -- uppercase
+    zip             TEXT NOT NULL DEFAULT '',  -- '' acts as wildcard (any zip)
     canonical_city  TEXT NOT NULL,      -- USPS-canonical form, as returned by BatchData
-    PRIMARY KEY (city, state)
+    PRIMARY KEY (city, state, zip)
 );
 """
 
@@ -340,22 +341,41 @@ def _migrate_phoneburner_cols() -> None:
 
 def _migrate_city_aliases() -> None:
     """
-    Seed the city_aliases table with USPS-canonical mappings we already know
-    about. BatchData uses USPS canonical city names (e.g. Wilder/Southgate/
-    Cold Spring KY are all stored as Newport in BatchData's index), so caching
-    these locally avoids a verify-endpoint round-trip on every miss.
+    Ensure the city_aliases table has the (city, state, zip) composite PK and
+    seed known USPS-canonical mappings.  Seeds use zip='' which acts as a
+    wildcard — get_city_alias() falls back to '' when no zip-specific row exists.
 
-    INSERT OR IGNORE — safe to call repeatedly.
+    Safe to call repeatedly: ALTER TABLE adds the zip column if missing, seed
+    rows are INSERT OR IGNORE.  If the old (city, state)-only PK is present we
+    recreate the table so the new PK is enforced correctly.
     """
+    with _conn() as con:
+        cols = {row[1] for row in con.execute("PRAGMA table_info(city_aliases)").fetchall()}
+        if "zip" not in cols:
+            # Recreate with new PK — preserve any rows already stored.
+            con.executescript("""
+                ALTER TABLE city_aliases RENAME TO city_aliases_old;
+                CREATE TABLE city_aliases (
+                    city            TEXT NOT NULL,
+                    state           TEXT NOT NULL,
+                    zip             TEXT NOT NULL DEFAULT '',
+                    canonical_city  TEXT NOT NULL,
+                    PRIMARY KEY (city, state, zip)
+                );
+                INSERT OR IGNORE INTO city_aliases (city, state, zip, canonical_city)
+                    SELECT city, state, '', canonical_city FROM city_aliases_old;
+                DROP TABLE city_aliases_old;
+            """)
+
     seeds = [
-        ("wilder",      "KY", "Newport"),
-        ("southgate",   "KY", "Newport"),
-        ("cold spring", "KY", "Newport"),
+        ("wilder",      "KY", "", "Newport"),
+        ("southgate",   "KY", "", "Newport"),
+        ("cold spring", "KY", "", "Newport"),
     ]
     with _conn() as con:
         con.executemany(
-            "INSERT OR IGNORE INTO city_aliases (city, state, canonical_city) "
-            "VALUES (?, ?, ?)",
+            "INSERT OR IGNORE INTO city_aliases (city, state, zip, canonical_city) "
+            "VALUES (?, ?, ?, ?)",
             seeds,
         )
 
@@ -520,34 +540,47 @@ def update_cancelled(listing_id: int, value: str) -> None:
         con.execute("UPDATE listings SET cancelled=? WHERE id=?", (value, listing_id))
 
 
-def get_city_alias(city: str, state: str) -> str | None:
+def get_city_alias(city: str, state: str, zip: str = "") -> str | None:
     """
-    Look up a USPS-canonical city for the given (city, state). Returns None
-    if no alias is recorded. Lookup keys are normalised (city lowercase,
-    state uppercase) so callers can pass the raw values from a listing.
+    Look up a USPS-canonical city for (city, state, zip). Tries an exact zip
+    match first, then falls back to the wildcard row (zip='') so unambiguous
+    aliases like Wilder/Southgate → Newport work without a zip.  Returns None
+    if no alias is recorded.
     """
     if not city or not state:
         return None
+    city_key  = city.strip().lower()
+    state_key = state.strip().upper()
+    zip_key   = (zip or "").strip()
     with _conn() as con:
+        if zip_key:
+            row = con.execute(
+                "SELECT canonical_city FROM city_aliases WHERE city=? AND state=? AND zip=?",
+                (city_key, state_key, zip_key),
+            ).fetchone()
+            if row:
+                return row["canonical_city"]
+        # fall back to wildcard
         row = con.execute(
-            "SELECT canonical_city FROM city_aliases WHERE city=? AND state=?",
-            (city.strip().lower(), state.strip().upper()),
+            "SELECT canonical_city FROM city_aliases WHERE city=? AND state=? AND zip=''",
+            (city_key, state_key),
         ).fetchone()
     return row["canonical_city"] if row else None
 
 
-def upsert_city_alias(city: str, state: str, canonical_city: str) -> None:
+def upsert_city_alias(city: str, state: str, canonical_city: str, zip: str = "") -> None:
     """
-    Record a (city, state) → canonical_city mapping. Updates the existing
-    canonical value on conflict so a refreshed BatchData answer wins.
+    Record a (city, state, zip) → canonical_city mapping. zip='' stores a
+    wildcard that applies when no zip-specific row matches.  Updates the
+    canonical value on conflict so a refreshed BatchData answer always wins.
     """
     if not city or not state or not canonical_city:
         return
     with _conn() as con:
         con.execute(
-            "INSERT INTO city_aliases (city, state, canonical_city) VALUES (?, ?, ?) "
-            "ON CONFLICT(city, state) DO UPDATE SET canonical_city = excluded.canonical_city",
-            (city.strip().lower(), state.strip().upper(), canonical_city.strip()),
+            "INSERT INTO city_aliases (city, state, zip, canonical_city) VALUES (?, ?, ?, ?) "
+            "ON CONFLICT(city, state, zip) DO UPDATE SET canonical_city = excluded.canonical_city",
+            (city.strip().lower(), state.strip().upper(), (zip or "").strip(), canonical_city.strip()),
         )
 
 

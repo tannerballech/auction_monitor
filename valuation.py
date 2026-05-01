@@ -29,6 +29,7 @@ Key contract with storage.update_valuations():
     "emv", "debt", "equity_signal"
 """
 
+import re
 import time
 import logging
 import traceback
@@ -130,18 +131,19 @@ def _normalize_address(addr: dict) -> dict | None:
     """
     orig_city  = (addr.get("city")  or "").strip()
     orig_state = (addr.get("state") or "").strip()
+    orig_zip   = (addr.get("zip")   or "").strip()
 
-    cached = get_city_alias(orig_city, orig_state)
+    cached = get_city_alias(orig_city, orig_state, orig_zip)
     if cached and cached.lower() != orig_city.lower():
         logger.info(
             f"[valuation] Address normalised from cache: city "
-            f"{orig_city!r} → {cached!r}"
+            f"{orig_city!r} → {cached!r} (zip={orig_zip!r})"
         )
         return {
             "street": addr["street"],
             "city":   cached,
             "state":  orig_state,
-            "zip":    addr.get("zip", ""),
+            "zip":    orig_zip,
         }
 
     headers = {
@@ -182,7 +184,7 @@ def _normalize_address(addr: dict) -> dict | None:
             f"[valuation] Address normalised via BatchData: city "
             f"{orig_city!r} → {norm_city!r}"
         )
-        upsert_city_alias(orig_city, orig_state, norm_city)
+        upsert_city_alias(orig_city, orig_state, norm_city, orig_zip)
         return {
             "street": verified.get("street") or addr["street"],
             "city":   norm_city,
@@ -191,6 +193,32 @@ def _normalize_address(addr: dict) -> dict | None:
         }
 
     return None
+
+
+# ── Street pre-processing ────────────────────────────────────────────────────
+
+_AKA_RE       = re.compile(r"^(\d+)(?:\s+a/k/a\s+\d+)+\s+(.*)", re.IGNORECASE)
+_AMPERSAND_RE = re.compile(r"\s*&\s+\d+.*")
+_RANGE_RE     = re.compile(r"^(\d+)-\d+\b")
+_UNIT_RE      = re.compile(r"\s+#\S+(?:\s+\S+)?$")
+
+
+def _clean_street(street: str) -> str:
+    """
+    Normalise messy court-record street strings for BatchData lookup.
+    The raw value is never modified in the DB — this is lookup-only cleanup.
+
+      "926 a/k/a 930 a/k/a 932 Dixie Highway"           → "926 Dixie Highway"
+      "8117 Saint Anthony's Church Rd & 8119 Saint ..."  → "8117 Saint Anthony's Church Rd"
+      "237-247 South Fifth Street"                       → "237 South Fifth Street"
+      "6105 Titantic Way #L 116"                         → "6105 Titantic Way"
+    """
+    s = street.strip()
+    s = _AKA_RE.sub(r"\1 \2", s)
+    s = _AMPERSAND_RE.sub("", s)
+    s = _RANGE_RE.sub(lambda m: m.group(1), s)
+    s = _UNIT_RE.sub("", s)
+    return s.strip()
 
 
 # ── Equity signal ─────────────────────────────────────────────────────────────
@@ -234,8 +262,12 @@ def valuate_listing(listing: dict) -> dict | None:
         )
         return None
 
+    clean = _clean_street(street)
+    if clean != street:
+        logger.info(f"[valuation] Street cleaned: {street!r} → {clean!r}")
+
     addr_dict = {
-        "street": street,
+        "street": clean,
         "city":   city,
         "state":  state or "KY",
         "zip":    zip_,

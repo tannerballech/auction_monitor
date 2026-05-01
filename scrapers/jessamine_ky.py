@@ -238,9 +238,20 @@ def _parse_block(block: str, sale_date_override: str) -> dict | None:
     listing["Plaintiff"]   = _field(r"Plaintiff[:\s]*\n([^\n]+)", block)
     listing["Defendant(s)"] = _field(r"Defendants?[:\s]*\n([^\n]+)", block)
 
-    # Address — no-comma format; split into Street/City/Zip
-    raw_address = _field(r"Property\s+Address[:\s]*\n([^\n]+)", block)
-    if raw_address:
+    # Address — no-comma format; split into Street/City/Zip.
+    # Capture up to two lines in case city/zip appear on a separate line
+    # from the street (e.g. "104 Glenridge Way\nNicholasville KY 40356").
+    raw_address_m = re.search(
+        r"Property\s+Address[:\s]*\n([^\n]+)(?:\n([^\n]+))?", block, re.IGNORECASE
+    )
+    if raw_address_m:
+        line1 = (raw_address_m.group(1) or "").strip()
+        line2 = (raw_address_m.group(2) or "").strip()
+        # If line2 looks like "City ST ZIP" or "City ST", append to line1
+        if line2 and re.match(r'^[A-Za-z\s]+[A-Z]{2}(\s+\d{5})?$', line2):
+            raw_address = f"{line1} {line2}".strip()
+        else:
+            raw_address = line1
         street, city, zip_code = _parse_jessamine_address(raw_address)
         listing["Street"] = street
         listing["City"]   = city

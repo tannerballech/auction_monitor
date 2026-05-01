@@ -146,6 +146,8 @@ def _normalize_address(addr: dict) -> dict | None:
             "zip":    orig_zip,
         }
 
+    time.sleep(RATE_LIMIT_DELAY)
+
     headers = {
         "Authorization": f"Bearer {BATCHDATA_API_KEY}",
         "Content-Type":  "application/json",
@@ -201,6 +203,7 @@ _AKA_RE       = re.compile(r"^(\d+)(?:\s+a/k/a\s+\d+)+\s+(.*)", re.IGNORECASE)
 _AMPERSAND_RE = re.compile(r"\s*&\s+\d+.*")
 _RANGE_RE     = re.compile(r"^(\d+)-\d+\b")
 _UNIT_RE      = re.compile(r"\s+#\S+(?:\s+\S+)?$")
+_SLASH_RE     = re.compile(r"^(\d+)\s+(.+?)\s*/\s*\1\s+(.+)$")
 
 
 def _clean_street(street: str) -> str:
@@ -219,6 +222,23 @@ def _clean_street(street: str) -> str:
     s = _RANGE_RE.sub(lambda m: m.group(1), s)
     s = _UNIT_RE.sub("", s)
     return s.strip()
+
+
+def _slash_candidates(street: str) -> list[str]:
+    """
+    When the same street number appears on both sides of a slash, the record
+    has two names for one property — try each independently.
+
+      "2306 Morton Lane/2306 Sertata Drive" → ["2306 Morton Lane", "2306 Sertata Drive"]
+
+    Returns [street] unchanged when the pattern doesn't match (different numbers
+    on each side indicate a range or dual-parcel, not a dual-name).
+    """
+    m = _SLASH_RE.match(street.strip())
+    if m:
+        num, name1, name2 = m.group(1), m.group(2), m.group(3)
+        return [f"{num} {name1}", f"{num} {name2}"]
+    return [street]
 
 
 # ── Equity signal ─────────────────────────────────────────────────────────────
@@ -266,12 +286,7 @@ def valuate_listing(listing: dict) -> dict | None:
     if clean != street:
         logger.info(f"[valuation] Street cleaned: {street!r} → {clean!r}")
 
-    addr_dict = {
-        "street": clean,
-        "city":   city,
-        "state":  state or "KY",
-        "zip":    zip_,
-    }
+    candidates = _slash_candidates(clean)
 
     raw_judgment     = listing.get("Judgment / Loan Amount", "")
     scraped_judgment = None
@@ -285,16 +300,29 @@ def valuate_listing(listing: dict) -> dict | None:
 
     include_mortgage = (scraped_judgment is None)
 
-    prop = _batchdata_lookup(addr_dict, include_mortgage)
+    base = {
+        "city":  city,
+        "state": state or "KY",
+        "zip":   zip_,
+    }
 
-    # If the initial lookup failed, try once more with a normalised address.
-    # BatchData uses USPS-canonical city names (e.g. "Newport" instead of
-    # "Wilder" or "Southgate") that may differ from what the county records use.
-    if prop is None:
-        norm = _normalize_address(addr_dict)
-        if norm:
-            logger.info(f"[valuation] Retrying lookup with normalised address: {norm}")
-            prop = _batchdata_lookup(norm, include_mortgage)
+    prop = None
+    for candidate in candidates:
+        if len(candidates) > 1:
+            logger.info(f"[valuation] Trying slash candidate: {candidate!r}")
+        addr_dict = {**base, "street": candidate}
+
+        prop = _batchdata_lookup(addr_dict, include_mortgage)
+
+        # On a miss, try once more with a normalised (USPS-canonical) address.
+        if prop is None:
+            norm = _normalize_address(addr_dict)
+            if norm:
+                logger.info(f"[valuation] Retrying lookup with normalised address: {norm}")
+                prop = _batchdata_lookup(norm, include_mortgage)
+
+        if prop is not None:
+            break
 
     if prop is None:
         return None

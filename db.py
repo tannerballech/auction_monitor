@@ -471,8 +471,9 @@ def get_listings_needing_valuation() -> list[dict]:
           AND sale_date >= ?
         ORDER BY sale_date
     """
+    cutoff = str(date.today() + timedelta(days=MIN_DAYS_OUT))
     with _conn() as con:
-        rows = con.execute(sql, (str(date.today()),)).fetchall()
+        rows = con.execute(sql, (cutoff,)).fetchall()
     return [_row_to_dict(r) for r in rows]
 
 
@@ -503,7 +504,8 @@ def get_listings_needing_skiptrace() -> list[dict]:
           AND (skiptrace_date IS NULL OR skiptrace_date = '')
         ORDER BY sale_date
     """
-    params = (*_SKIPTRACE_QUALIFYING_SIGNALS, str(date.today()))
+    cutoff = str(date.today() + timedelta(days=MIN_DAYS_OUT))
+    params = (*_SKIPTRACE_QUALIFYING_SIGNALS, cutoff)
     with _conn() as con:
         rows = con.execute(sql, params).fetchall()
     return [_row_to_dict(r) for r in rows]
@@ -561,8 +563,9 @@ def get_listings_needing_heir_research() -> list[dict]:
           AND sale_date >= ?
         ORDER BY sale_date
     """
+    cutoff = str(date.today() + timedelta(days=MIN_DAYS_OUT))
     with _conn() as con:
-        rows = con.execute(sql, (str(date.today()),)).fetchall()
+        rows = con.execute(sql, (cutoff,)).fetchall()
     return [_row_to_dict(r) for r in rows]
 
 

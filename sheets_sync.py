@@ -15,9 +15,10 @@ Auth reuses the same OAuth token/service as sheets_writer.py.
 from __future__ import annotations
 
 import logging
+from datetime import date, timedelta
 from typing import Any
 
-from db import _conn, _row_to_dict
+from db import _conn, _row_to_dict, MIN_DAYS_OUT
 from sheets_writer import _get_service
 from config import SPREADSHEET_ID
 
@@ -225,17 +226,20 @@ def _clear_and_write(
 
 def _read_all_listings() -> list[dict]:
     """
-    Return listings that meet equity criteria, sorted by signal priority:
+    Return listings that meet equity criteria and are at least MIN_DAYS_OUT
+    days in the future, sorted by signal priority:
       🏆 first → ✅ → ❓ / blank (not yet valuated) last.
     Rows with ⚠️ or ❌ are excluded — below the threshold we act on.
     Within each signal group, upcoming sale dates come first.
     """
+    cutoff = str(date.today() + timedelta(days=MIN_DAYS_OUT))
     with _conn() as con:
         rows = con.execute("""
             SELECT * FROM listings
-            WHERE equity_signal IN ('🏆', '✅', '❓')
+            WHERE (equity_signal IN ('🏆', '✅', '❓')
                OR equity_signal IS NULL
-               OR equity_signal = ''
+               OR equity_signal = '')
+              AND sale_date >= ?
             ORDER BY
               CASE equity_signal
                 WHEN '🏆' THEN 1
@@ -244,7 +248,7 @@ def _read_all_listings() -> list[dict]:
               END,
               sale_date ASC,
               id
-        """).fetchall()
+        """, (cutoff,)).fetchall()
     return [_row_to_dict(r) for r in rows]
 
 
@@ -394,6 +398,7 @@ DS_RELATIVES_HEADERS = [
 
 def _build_ds_persons_rows() -> list[list]:
     """Join directskip_persons with listings for context columns."""
+    cutoff = str(date.today() + timedelta(days=MIN_DAYS_OUT))
     with _conn() as con:
         rows = con.execute("""
             SELECT
@@ -409,8 +414,9 @@ def _build_ds_persons_rows() -> list[list]:
             FROM directskip_persons p
             JOIN listings l ON l.id = p.listing_id
             WHERE l.equity_signal IN ('🏆', '✅')
+              AND l.sale_date >= ?
             ORDER BY p.listing_id, p.person_number
-        """).fetchall()
+        """, (cutoff,)).fetchall()
 
     result = [DS_PERSONS_HEADERS]
     for r in rows:
@@ -439,6 +445,7 @@ def _build_ds_persons_rows() -> list[list]:
 
 def _build_ds_relatives_rows() -> list[list]:
     """Join directskip_relatives with listings for context columns."""
+    cutoff = str(date.today() + timedelta(days=MIN_DAYS_OUT))
     with _conn() as con:
         rows = con.execute("""
             SELECT
@@ -453,8 +460,9 @@ def _build_ds_relatives_rows() -> list[list]:
             JOIN listings l ON l.id = r.listing_id
             WHERE r.name IS NOT NULL AND r.name != ''
               AND l.equity_signal IN ('🏆', '✅')
+              AND l.sale_date >= ?
             ORDER BY r.listing_id, r.person_number, r.relative_number
-        """).fetchall()
+        """, (cutoff,)).fetchall()
 
     result = [DS_RELATIVES_HEADERS]
     for r in rows:

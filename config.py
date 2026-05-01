@@ -178,19 +178,20 @@ DEFAULT_HEADERS = {
 }
 
 TN_VALUATE_COUNTIES: list[str] | None = [
-"Knox",
-"Loudon",
-"Anderson",
-"Blount",
-"Sevier"
-"Hamilton",
-"Bradley",
-"McMinn",
-"Marion",
-"Sequatchie",
-"Rutherford",
-"Williamson",
-"Davidson",
-"Sumner",
-"Wilson"
+    "Knox",
+    "Loudon",
+    "Anderson",
+    "Blount",
+    "Sevier",
+    "Hamilton",
+    "Montgomery",
+    "Bradley",
+    "McMinn",
+    "Marion",
+    "Sequatchie",
+    "Rutherford",
+    "Williamson",
+    "Davidson",
+    "Sumner",
+    "Wilson",
 ]

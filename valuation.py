@@ -36,6 +36,7 @@ import traceback
 import requests
 
 from config import BATCHDATA_API_KEY, EQUITY_THRESHOLDS
+from db import get_city_alias, upsert_city_alias
 
 logger = logging.getLogger(__name__)
 
@@ -113,13 +114,36 @@ def _batchdata_lookup(address_dict: dict, include_mortgage: bool) -> dict | None
 
 def _normalize_address(addr: dict) -> dict | None:
     """
-    Call BatchData's address-verify endpoint and return a corrected address
-    dict if BatchData normalised the city to something different (e.g.
-    "Wilder" → "Newport").  Returns None on any failure or if nothing changed.
+    Return a corrected address dict if the city can be normalised to its
+    USPS-canonical form (e.g. "Wilder" → "Newport"). Returns None on failure
+    or if nothing changed.
 
-    Only called as a fallback when the primary property lookup returns nothing,
-    so the extra API round-trip is paid only when it would actually help.
+    Two-tier strategy:
+      1. Check the local city_aliases table first. Repeat aliases (e.g. the
+         Campbell County KY suburbs all → Newport) cost zero API calls.
+      2. On a cache miss, call BatchData's address-verify endpoint. If it
+         returns a different canonical city, store the mapping so the next
+         hit is free.
+
+    Only called as a fallback when the primary property lookup returns
+    nothing, so the verify round-trip is paid only when it would actually help.
     """
+    orig_city  = (addr.get("city")  or "").strip()
+    orig_state = (addr.get("state") or "").strip()
+
+    cached = get_city_alias(orig_city, orig_state)
+    if cached and cached.lower() != orig_city.lower():
+        logger.info(
+            f"[valuation] Address normalised from cache: city "
+            f"{orig_city!r} → {cached!r}"
+        )
+        return {
+            "street": addr["street"],
+            "city":   cached,
+            "state":  orig_state,
+            "zip":    addr.get("zip", ""),
+        }
+
     headers = {
         "Authorization": f"Bearer {BATCHDATA_API_KEY}",
         "Content-Type":  "application/json",
@@ -150,14 +174,15 @@ def _normalize_address(addr: dict) -> dict | None:
         return None
 
     norm_city = (verified.get("city") or "").strip()
-    orig_city = (addr.get("city") or "").strip()
 
     # Only return a new dict if the city actually changed — no point retrying
     # with the same values we already tried.
     if norm_city and norm_city.lower() != orig_city.lower():
         logger.info(
-            f"[valuation] Address normalised: city {orig_city!r} → {norm_city!r}"
+            f"[valuation] Address normalised via BatchData: city "
+            f"{orig_city!r} → {norm_city!r}"
         )
+        upsert_city_alias(orig_city, orig_state, norm_city)
         return {
             "street": verified.get("street") or addr["street"],
             "city":   norm_city,

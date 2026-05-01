@@ -39,9 +39,10 @@ from config import BATCHDATA_API_KEY, EQUITY_THRESHOLDS
 
 logger = logging.getLogger(__name__)
 
-BATCHDATA_ENDPOINT = "https://api.batchdata.com/api/v1/property/lookup/all-attributes"
-RATE_LIMIT_DELAY   = 1.0
-REQUEST_TIMEOUT    = 30
+BATCHDATA_ENDPOINT        = "https://api.batchdata.com/api/v1/property/lookup/all-attributes"
+BATCHDATA_VERIFY_ENDPOINT = "https://api.batchdata.com/api/v1/address/verify"
+RATE_LIMIT_DELAY          = 1.0
+REQUEST_TIMEOUT           = 30
 
 
 # ── BatchData call ────────────────────────────────────────────────────────────
@@ -108,6 +109,65 @@ def _batchdata_lookup(address_dict: dict, include_mortgage: bool) -> dict | None
     return props[0]
 
 
+# ── Address normalisation ─────────────────────────────────────────────────────
+
+def _normalize_address(addr: dict) -> dict | None:
+    """
+    Call BatchData's address-verify endpoint and return a corrected address
+    dict if BatchData normalised the city to something different (e.g.
+    "Wilder" → "Newport").  Returns None on any failure or if nothing changed.
+
+    Only called as a fallback when the primary property lookup returns nothing,
+    so the extra API round-trip is paid only when it would actually help.
+    """
+    headers = {
+        "Authorization": f"Bearer {BATCHDATA_API_KEY}",
+        "Content-Type":  "application/json",
+    }
+    payload = {"requests": [{"address": addr}]}
+
+    try:
+        resp = requests.post(
+            BATCHDATA_VERIFY_ENDPOINT,
+            json=payload,
+            headers=headers,
+            timeout=REQUEST_TIMEOUT,
+        )
+    except requests.RequestException as e:
+        logger.warning(f"[valuation] Address verify request failed: {e}")
+        return None
+
+    if resp.status_code != 200:
+        logger.warning(f"[valuation] Address verify HTTP {resp.status_code}")
+        return None
+
+    try:
+        verified = resp.json()["results"]["addresses"][0]
+    except (KeyError, IndexError, TypeError):
+        return None
+
+    if not verified.get("meta", {}).get("verified"):
+        return None
+
+    norm_city = (verified.get("city") or "").strip()
+    orig_city = (addr.get("city") or "").strip()
+
+    # Only return a new dict if the city actually changed — no point retrying
+    # with the same values we already tried.
+    if norm_city and norm_city.lower() != orig_city.lower():
+        logger.info(
+            f"[valuation] Address normalised: city {orig_city!r} → {norm_city!r}"
+        )
+        return {
+            "street": verified.get("street") or addr["street"],
+            "city":   norm_city,
+            "state":  verified.get("state") or addr["state"],
+            "zip":    verified.get("zip") or addr.get("zip", ""),
+        }
+
+    return None
+
+
 # ── Equity signal ─────────────────────────────────────────────────────────────
 
 def compute_equity_signal(emv: float, debt: float | None) -> str:
@@ -169,6 +229,16 @@ def valuate_listing(listing: dict) -> dict | None:
     include_mortgage = (scraped_judgment is None)
 
     prop = _batchdata_lookup(addr_dict, include_mortgage)
+
+    # If the initial lookup failed, try once more with a normalised address.
+    # BatchData uses USPS-canonical city names (e.g. "Newport" instead of
+    # "Wilder" or "Southgate") that may differ from what the county records use.
+    if prop is None:
+        norm = _normalize_address(addr_dict)
+        if norm:
+            logger.info(f"[valuation] Retrying lookup with normalised address: {norm}")
+            prop = _batchdata_lookup(norm, include_mortgage)
+
     if prop is None:
         return None
 
